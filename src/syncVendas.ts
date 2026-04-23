@@ -1,6 +1,11 @@
 import axios from 'axios';
+import https from 'https';
 import { createPrismaClient } from './lib/prisma';
 import { ClientConfig } from './config/clients';
+
+const agent = new https.Agent({  
+  rejectUnauthorized: false
+});
 import "dotenv/config";
 
 async function getYesterdayDate() {
@@ -24,7 +29,7 @@ export async function syncVendas(client: ClientConfig) {
     const loginRes = await axios.post(`${apiUrl}/login`, {
       email: client.apiEmail,
       password: client.apiPassword
-    });
+    }, { httpsAgent: agent });
 
     const token = loginRes.data.token;
     if (!token) throw new Error("Não foi possível obter o token.");
@@ -35,7 +40,8 @@ export async function syncVendas(client: ClientConfig) {
     // 3. Buscar Vendas
     const vendasRes = await axios.get(`${apiUrl}/venda`, {
       params: { dataInicial: yesterday, dataFinal: yesterday },
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: agent
     });
 
     const dados = vendasRes.data;
