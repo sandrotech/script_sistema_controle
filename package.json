@@ -1,0 +1,38 @@
+{
+  "name": "b7-relatorio",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "sync:unidades": "tsx src/syncUnidades.ts",
+    "sync:planos": "tsx src/syncPlanos.ts",
+    "sync:alunos": "tsx src/syncAlunos.ts",
+    "sync:vendas": "tsx src/syncVendas.ts",
+    "sync:all": "tsx src/main.ts",
+    "sync:prod": "tsx src/main.ts",
+    "api:start": "cd backend && tsx src/server.ts",
+    "start": "tsx src/main.ts",
+    "postinstall": "prisma generate"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.5.2",
+    "@types/pg": "^8.20.0"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^6.19.3",
+    "@prisma/client": "^6.19.3",
+    "axios": "^1.15.0",
+    "dotenv": "^17.4.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.20.0",
+    "prisma": "^6.19.3",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}

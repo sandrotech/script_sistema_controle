@@ -1,0 +1,9 @@
+node_modules
+backend/node_modules
+.git
+.env
+dist
+build
+npm-debug.log
+.DS_Store
+*.md

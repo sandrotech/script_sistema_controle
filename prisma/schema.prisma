@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Unidade {
+  chave                    String   @id
+  codigo                   Int
+  nome                     String
+  cidade                   String?
+  estado                   String?
+  cep                      String?
+  endereco                 String?
+  telefone                 String?
+  email                    String?
+  complemento              String?
+  longitude                String?
+  latitude                 String?
+  usarSistemaInternacional Boolean  @default(false)
+  // ID da empresa nesta nova API (apigw). Ex: Maraponga = 1
+  empresaId                Int?
+  // Metadados de Sincronismo (Resiliência)
+  alunosSyncStatus String?
+  alunosSyncLastAt DateTime?
+  alunosSyncMessage String?
+
+  planosSyncStatus String?
+  planosSyncLastAt DateTime?
+  planosSyncMessage String?
+
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
+  planos                   Plano[]
+  alunos                   Aluno[]
+}
+
+model Plano {
+  id           String  @id @default(uuid())
+  codigo       Int
+  nome         String
+  mensalidade  Float?
+  fidelidade   Int?
+  horario      String?
+  adesao       Float?
+  anuidade     Float?
+
+  unidadeChave String
+  unidade      Unidade @relation(fields: [unidadeChave], references: [chave], onDelete: Cascade)
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([unidadeChave, codigo])
+  @@index([unidadeChave])
+}
+
+model Aluno {
+  id String @id @default(uuid())
+
+  // Identificadores da API
+  matricula     Int  // matriculaZW — chave de upsert
+  codigoAluno   Int  // id original da API
+  codigoCliente Int?
+  codigoPessoa  Int?
+  codigoExterno String?
+  codAcesso     String?
+
+  // Dados pessoais
+  nome           String
+  situacaoAluno  String    @default("ATIVO")
+  dataNascimento DateTime?
+  idade          Int?
+  sexo           String?
+  email          String?   // primeiro item de emails[]
+  telefone       String?   // primeiro item de fones[]
+
+  // Plano e contrato
+  planoNome          String?
+  contratoVencimento DateTime?
+  contratoTipo       String?
+  situacaoContrato   String?
+
+  // Saúde e objetivos
+  pressaoApresentar String?
+  fcApresentar      String?
+  listaObjetivos    String?  // JSON string do array
+  parqStatus        Boolean  @default(false)
+
+  // Outros
+  usarApp    Boolean  @default(false)
+  confirmado Boolean  @default(false)
+  autorizado Boolean  @default(false)
+  programas  String?  // JSON string do array
+
+  unidadeChave String
+  unidade      Unidade @relation(fields: [unidadeChave], references: [chave], onDelete: Cascade)
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([unidadeChave, matricula])
+  @@index([unidadeChave])
+  @@index([situacaoAluno])
+  @@index([unidadeChave, situacaoAluno])
+}
+
+model DashboardSnapshot {
+  id         String   @id @default(uuid())
+  data       DateTime @default(now())
+  unidade    String   // Chave da unidade ou "GERAL"
+  
+  ativos     Int      @default(0)
+  inativos   Int      @default(0)
+  visitantes Int      @default(0)
+  total      Int      @default(0)
+  
+  lucroTotal Float    @default(0)
+  novos      Int      @default(0)
+  vencendo   Int      @default(0)
+
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@index([data])
+  @@index([unidade])
+}
+
+model Venda {
+  id              Int      @id @default(autoincrement())
+  loja            Int
+  loja_nome       String?
+  ean             String
+  plu             Int?
+  produto         String
+  qtd             Float
+  venda           Float
+  custo           Float?
+  cod_interno     String?
+  origem          String
+  data_importacao DateTime @default(now())
+  chave_unica     String   @unique
+  userId          String?
+  valor_unitario  Float?
+  data            DateTime
+
+  @@index([data])
+  @@index([loja])
+  @@map("vendas")
+}
+
