@@ -8,9 +8,9 @@ const agent = new https.Agent({
 });
 import "dotenv/config";
 
-async function getYesterdayDate() {
+async function getDateStr(daysAgo: number) {
   const date = new Date();
-  date.setDate(date.getDate() - 1);
+  date.setDate(date.getDate() - daysAgo);
   const dd = String(date.getDate()).padStart(2, '0');
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const yyyy = date.getFullYear();
@@ -38,12 +38,13 @@ export async function syncVendas(client: ClientConfig) {
       throw new Error("Não foi possível obter o token.");
     }
 
-    // 2. Datas
-    const yesterday = await getYesterdayDate();
+    // 2. Datas (Ontem e Antes de Ontem)
+    const endDate = await getDateStr(1);   // Ontem
+    const startDate = await getDateStr(2); // Antes de ontem
     
     // 3. Buscar Vendas
     const vendasRes = await axios.get(`${apiUrl}/venda`, {
-      params: { dataInicial: yesterday, dataFinal: yesterday },
+      params: { dataInicial: startDate, dataFinal: endDate },
       headers: { Authorization: `Bearer ${token}` },
       httpsAgent: agent
     });
