@@ -66,6 +66,16 @@ export async function syncVendas(client: ClientConfig) {
         const chaveUnica = `venda-${lojaId}-${item.DATA}-${item.EAN}-${item.PLU || '0'}`;
         const valorUnitario = item.QTD > 0 ? item.VENDA / item.QTD : 0;
 
+        const parseDate = (dateStr: string) => {
+          if (!dateStr) return new Date();
+          const parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
+          if (parts.length === 3) {
+            const [day, month, year] = parts;
+            return new Date(`${year}-${month}-${day}T12:00:00Z`);
+          }
+          return new Date(dateStr);
+        };
+
         await prisma.venda.upsert({
           where: { chave_unica: chaveUnica },
           update: {
@@ -87,7 +97,7 @@ export async function syncVendas(client: ClientConfig) {
             origem: "API_VENDAS_V2",
             chave_unica: chaveUnica,
             valor_unitario: valorUnitario,
-            data: new Date(`${item.DATA}T12:00:00Z`),
+            data: parseDate(item.DATA),
           }
         });
         totalImportado++;
