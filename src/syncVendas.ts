@@ -41,6 +41,7 @@ export async function syncVendas(client: ClientConfig) {
     // 2. Datas (Ontem e Antes de Ontem)
     const endDate = await getDateStr(1);   // Ontem
     const startDate = await getDateStr(2); // Antes de ontem
+    console.log(`📅 [${client.name}] Buscando de ${startDate} até ${endDate}...`);
     
     // 3. Buscar Vendas
     const vendasRes = await axios.get(`${apiUrl}/venda`, {
@@ -50,12 +51,20 @@ export async function syncVendas(client: ClientConfig) {
     });
 
     const dados = vendasRes.data;
+    
+    // Log para depuração de datas recebidas
+    if (Array.isArray(dados)) {
+        const datasEncontradas = new Set();
+        dados.forEach(g => (g.VENDAS || []).forEach((v: any) => datasEncontradas.add(v.DATA)));
+        console.log(`🔍 [${client.name}] Datas recebidas da API:`, Array.from(datasEncontradas));
+    }
     if (!Array.isArray(dados)) {
       console.log(`⚠️ [${client.name}] Sem dados para processar.`);
       return;
     }
 
     let totalImportado = 0;
+    const contagemPorData: Record<string, number> = {};
 
     // 4. Salvar no Banco do Cliente
     for (const grupo of dados) {
@@ -64,6 +73,7 @@ export async function syncVendas(client: ClientConfig) {
       const vendasLoja = grupo.VENDAS || [];
 
       for (const item of vendasLoja) {
+        contagemPorData[item.DATA] = (contagemPorData[item.DATA] || 0) + 1;
         const chaveUnica = `venda-${lojaId}-${item.DATA}-${item.EAN}-${item.PLU || '0'}`;
         const valorUnitario = item.QTD > 0 ? item.VENDA / item.QTD : 0;
 
@@ -105,7 +115,11 @@ export async function syncVendas(client: ClientConfig) {
       }
     }
 
-    console.log(`✅ [${client.name}] Sucesso: ${totalImportado} registros.`);
+    console.log(`✅ [${client.name}] Sucesso: ${totalImportado} registros total.`);
+    Object.entries(contagemPorData).forEach(([dt, qtd]) => {
+      console.log(`   - ${dt}: ${qtd} vendas`);
+    });
+    
     return { success: true, count: totalImportado };
 
   } catch (error: any) {
