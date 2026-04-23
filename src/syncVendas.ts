@@ -31,8 +31,12 @@ export async function syncVendas(client: ClientConfig) {
       password: client.apiPassword
     }, { httpsAgent: agent });
 
-    const token = loginRes.data.token;
-    if (!token) throw new Error("Não foi possível obter o token.");
+    const token = typeof loginRes.data === 'string' ? loginRes.data : loginRes.data.token;
+    
+    if (!token) {
+      console.log(`⚠️ [${client.name}] Resposta da API inválida:`, JSON.stringify(loginRes.data));
+      throw new Error("Não foi possível obter o token.");
+    }
 
     // 2. Datas
     const yesterday = await getYesterdayDate();
