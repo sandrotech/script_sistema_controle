@@ -15,6 +15,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    command: tail -f /dev/null
     restart: always
     ports:
       - "3000:3000"
