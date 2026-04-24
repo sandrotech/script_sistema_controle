@@ -11,10 +11,10 @@ services:
     ports:
       - "5432:5432"
 
-  backend:
+  worker:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile
     restart: always
     ports:
       - "3000:3000"
