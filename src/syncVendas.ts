@@ -64,6 +64,7 @@ export async function syncVendas(client: ClientConfig) {
     }
 
     let totalImportado = 0;
+    let totalNovos = 0;
     const contagemPorData: Record<string, number> = {};
 
     // 4. Salvar no Banco do Cliente
@@ -86,6 +87,14 @@ export async function syncVendas(client: ClientConfig) {
           }
           return new Date(dateStr);
         };
+
+        // Verificar se já existe para contar novos
+        const existe = await prisma.venda.findUnique({
+          where: { chave_unica: chaveUnica },
+          select: { id: true }
+        });
+
+        if (!existe) totalNovos++;
 
         await prisma.venda.upsert({
           where: { chave_unica: chaveUnica },
@@ -115,12 +124,12 @@ export async function syncVendas(client: ClientConfig) {
       }
     }
 
-    console.log(`✅ [${client.name}] Sucesso: ${totalImportado} registros total.`);
+    console.log(`✅ [${client.name}] Sucesso: ${totalImportado} registros total (${totalNovos} novos).`);
     Object.entries(contagemPorData).forEach(([dt, qtd]) => {
       console.log(`   - ${dt}: ${qtd} vendas`);
     });
     
-    return { success: true, count: totalImportado };
+    return { success: true, count: totalImportado, newRecords: totalNovos };
 
   } catch (error: any) {
     const errorMsg = error.response?.data?.message || error.message;

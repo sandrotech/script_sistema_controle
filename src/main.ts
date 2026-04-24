@@ -8,13 +8,17 @@ async function main() {
 
   const results: string[] = [];
 
+  let totalNovosGeral = 0;
   for (const client of clients) {
     const res = await syncVendas(client);
     
     if (res.success) {
-      results.push(`✅ *${client.name}*: ${res.count} vendas`);
+      const novos = res.newRecords || 0;
+      totalNovosGeral += novos;
+      results.push(`✅ *${client.name}*: ${res.count} vendas (${novos} novos)`);
     } else {
       results.push(`❌ *${client.name}*: Erro (${res.error})`);
+      totalNovosGeral += 1; // Forçar envio em caso de erro para alerta
     }
   }
 
@@ -30,8 +34,13 @@ ${results.join('\n')}
 
   console.log(report);
   
-  // Enviar para Telegram
-  await sendTelegramMessage(report);
+  // Enviar para Telegram apenas se houver novidades ou erro
+  if (totalNovosGeral > 0) {
+    await sendTelegramMessage(report);
+    console.log("📨 Notificação enviada para o Telegram.");
+  } else {
+    console.log("🤫 Sem novos registros. Notificação suprimida.");
+  }
 
   console.log("\n🚀 [FINALIZADO] Todos os clientes foram processados.");
   console.timeEnd("⏱️ Tempo Total");
