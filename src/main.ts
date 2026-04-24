@@ -46,4 +46,7 @@ ${results.join('\n')}
   console.timeEnd("⏱️ Tempo Total");
 }
 
-main();
+main().catch(err => {
+  console.error("💥 Erro crítico no processo principal:", err);
+  process.exit(1);
+});

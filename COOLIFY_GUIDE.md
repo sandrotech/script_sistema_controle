@@ -19,8 +19,9 @@ Como este serviço roda apenas em horários agendados, vamos configurá-lo no Co
     - `BACKEND_URL`: (URL interna ou pública da sua API separada).
     - `JWT_SECRET`: (Mesma chave usada na sua API).
     - `API_TOKEN_...`: (Tokens das lojas).
-5. No campo **Start Command**, deixe vazio ou como: `npm run sync:prod`.
-6. **Importante**: Como este é um script que termina após rodar, o container pode marcar como "Exited" após o sucesso. O ideal é usar o recurso de **Scheduled Tasks** do Coolify.
+5. **Configuração CRÍTICA**: No campo **Start Command**, você deve colocar: `tail -f /dev/null`.
+   - Isso manterá o container "Vivo" e estável (evitando o loop de 222x restarts).
+6. **Agendamento**: O script real será executado apenas pela **Scheduled Task** (veja abaixo).
 
 ---
 

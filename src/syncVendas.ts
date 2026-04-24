@@ -60,7 +60,7 @@ export async function syncVendas(client: ClientConfig) {
     }
     if (!Array.isArray(dados)) {
       console.log(`⚠️ [${client.name}] Sem dados para processar.`);
-      return;
+      return { success: true, count: 0, newRecords: 0 };
     }
 
     let totalImportado = 0;
