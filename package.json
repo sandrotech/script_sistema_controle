@@ -9,6 +9,7 @@
     "sync:planos": "tsx src/syncPlanos.ts",
     "sync:alunos": "tsx src/syncAlunos.ts",
     "sync:vendas": "tsx src/syncVendas.ts",
+    "sync:periodo": "tsx src/syncPeriodo.ts",
     "sync:all": "tsx src/main.ts",
     "sync:prod": "tsx src/main.ts",
     "api:start": "cd backend && tsx src/server.ts",

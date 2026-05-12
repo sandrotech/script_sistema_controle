@@ -17,7 +17,7 @@ async function getDateStr(daysAgo: number) {
   return `${dd}-${mm}-${yyyy}`;
 }
 
-export async function syncVendas(client: ClientConfig) {
+export async function syncVendas(client: ClientConfig, customStartDate?: string, customEndDate?: string) {
   console.log(`\n🛒 [${client.name}] Iniciando sincronismo...`);
 
   const apiUrl = process.env.VENDAS_API_URL || "https://vendas.cometasupermercados.com.br";
@@ -38,9 +38,9 @@ export async function syncVendas(client: ClientConfig) {
       throw new Error("Não foi possível obter o token.");
     }
 
-    // 2. Datas (Ontem e Antes de Ontem)
-    const endDate = await getDateStr(1);   // Ontem
-    const startDate = await getDateStr(2); // Antes de ontem
+    // 2. Datas (Ontem e Antes de Ontem por padrão, ou Período Customizado)
+    const endDate = customEndDate || await getDateStr(1);   // Ontem por padrão
+    const startDate = customStartDate || await getDateStr(2); // Antes de ontem por padrão
     console.log(`📅 [${client.name}] Buscando de ${startDate} até ${endDate}...`);
     
     // 3. Buscar Vendas
