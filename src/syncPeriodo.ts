@@ -1,35 +1,41 @@
 import { clients } from './config/clients';
 import { syncVendas } from './syncVendas';
 
+// Função para formatar as datas dinamicamente
+function getDateStr(daysAgo: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
 async function main() {
-  // Pega as datas passadas como argumento (ex: npm run sync:periodo 20-04-2026 12-05-2026)
   const args = process.argv.slice(2);
   
-  let startDate = args[0];
-  let endDate = args[1];
+  let startDateStr = args[0];
+  let endDateStr = args[1];
 
-  // Se não foi passada data inicial, define como 20/04/2026 por padrão
-  if (!startDate) {
-    startDate = "20-04-2026";
+  // Se não foi passada data inicial, define como 3 dias atrás por padrão (limite máximo da API)
+  if (!startDateStr) {
+    startDateStr = getDateStr(3); // ex: 09-05-2026
   }
 
-  // Se não foi passada data final, define como a data de hoje por padrão
-  if (!endDate) {
-    const today = new Date();
-    const dd = String(today.getDate()).padStart(2, '0');
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const yyyy = today.getFullYear();
-    endDate = `${dd}-${mm}-${yyyy}`;
+  // Se não foi passada data final, define como ontem (último dia consolidado)
+  if (!endDateStr) {
+    endDateStr = getDateStr(1); // ex: 11-05-2026
   }
 
-  console.log("🏁 INICIANDO PROCESSAMENTO MANUAL DE PERÍODO CUSTOMIZADO...");
-  console.log(`📅 Período selecionado: ${startDate} até ${endDate}\n`);
+  console.log("🏁 INICIANDO PROCESSAMENTO MANUAL DE PERÍODO (MÁXIMO DE 3 DIAS)...");
+  console.log(`📅 Período selecionado: ${startDateStr} até ${endDateStr}`);
+  console.log(`💡 Nota: A tabela da API de Vendas retém apenas os últimos 3 dias de histórico.`);
   console.time("⏱️ Tempo Total");
 
   const results: string[] = [];
 
   for (const client of clients) {
-    const res = await syncVendas(client, startDate, endDate);
+    const res = await syncVendas(client, startDateStr, endDateStr);
     
     if (res.success) {
       results.push(`✅ *${client.name}*: ${res.count} vendas (${res.newRecords} novos)`);
@@ -40,11 +46,11 @@ async function main() {
 
   // Relatório Final no Terminal
   const report = `
-📊 *RELATÓRIO DE SINCRONISMO DE PERÍODO (${startDate} a ${endDate})*
----------------------------------------
+📊 *RELATÓRIO DE SINCRONISMO DO PERÍODO (${startDateStr} a ${endDateStr})*
+-----------------------------------------------------------
 ${results.join('\n')}
----------------------------------------
-🚀 Sincronismo de Período Concluído!
+-----------------------------------------------------------
+🚀 Sincronismo do Período Concluído!
   `;
 
   console.log(report);
