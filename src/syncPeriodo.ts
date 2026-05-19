@@ -1,5 +1,6 @@
 import { clients } from './config/clients';
 import { syncVendas } from './syncVendas';
+import { sendTelegramMessage } from './services/telegramService';
 
 // Função para formatar as datas dinamicamente
 function getDateStr(daysAgo: number): string {
@@ -33,18 +34,22 @@ async function main() {
   console.time("⏱️ Tempo Total");
 
   const results: string[] = [];
+  let totalNovosGeral = 0;
 
   for (const client of clients) {
     const res = await syncVendas(client, startDateStr, endDateStr);
     
     if (res.success) {
-      results.push(`✅ *${client.name}*: ${res.count} vendas (${res.newRecords} novos)`);
+      const novos = res.newRecords || 0;
+      totalNovosGeral += novos;
+      results.push(`✅ *${client.name}*: ${res.count} vendas (${novos} novos)`);
     } else {
       results.push(`❌ *${client.name}*: Erro (${res.error})`);
+      totalNovosGeral += 1; // Forçar envio em caso de erro para alerta de falha
     }
   }
 
-  // Relatório Final no Terminal
+  // Relatório Final
   const report = `
 📊 *RELATÓRIO DE SINCRONISMO DO PERÍODO (${startDateStr} a ${endDateStr})*
 -----------------------------------------------------------
@@ -54,6 +59,15 @@ ${results.join('\n')}
   `;
 
   console.log(report);
+  
+  // Enviar para Telegram apenas se houver novidades ou erro
+  if (totalNovosGeral > 0) {
+    await sendTelegramMessage(report);
+    console.log("📨 Notificação enviada para o Telegram.");
+  } else {
+    console.log("🤫 Sem novos registros. Notificação suprimida.");
+  }
+
   console.timeEnd("⏱️ Tempo Total");
 }
 
