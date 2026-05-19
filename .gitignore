@@ -6,3 +6,4 @@ node_modules
 vendas_api_v2/
 .vendas_api_v2/*
 .vendas_api_v2
+src/lib/prisma-old/

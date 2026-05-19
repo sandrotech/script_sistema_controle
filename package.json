@@ -14,7 +14,7 @@
     "sync:prod": "tsx src/main.ts",
     "api:start": "cd backend && tsx src/server.ts",
     "start": "tsx src/main.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && prisma generate --schema=prisma/schema_old.prisma"
   },
   "keywords": [],
   "author": "",

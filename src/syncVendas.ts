@@ -1,6 +1,6 @@
 import axios from 'axios';
 import https from 'https';
-import { createPrismaClient } from './lib/prisma';
+import { createPrismaClient, createPrismaClientOld } from './lib/prisma';
 import { ClientConfig } from './config/clients';
 
 const agent = new https.Agent({  
@@ -21,7 +21,12 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
   console.log(`\n🛒 [${client.name}] Iniciando sincronismo...`);
 
   const apiUrl = process.env.VENDAS_API_URL || "https://vendas.cometasupermercados.com.br";
-  const prisma = createPrismaClient(client.databaseUrl);
+  const isVictor = client.apiEmail === 'victor@ultrarota.com.br';
+  
+  // Instanciar o cliente do Prisma correspondente ao banco/schema de destino
+  const prisma = isVictor 
+    ? createPrismaClient(client.databaseUrl)
+    : createPrismaClientOld(client.databaseUrl);
 
   try {
     // 1. Autenticação
@@ -72,11 +77,51 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
       const lojaId = grupo.LOJA.LOJA;
       const lojaNome = grupo.LOJA.NOME;
       const vendasLoja = grupo.VENDAS || [];
+      const userId = client.apiEmail;
+
+      let lid: number | undefined;
+
+      if (isVictor) {
+        // Buscar ou criar a loja física no banco para obter o id da relação (apenas para Victor)
+        let lojaDb = await (prisma as any).loja.findFirst({
+          where: { nome: lojaNome, userId: userId }
+        });
+        
+        if (!lojaDb) {
+          console.log(`   🏠 [${client.name}] Criando Loja física no BD: "${lojaNome}"...`);
+          lojaDb = await (prisma as any).loja.create({
+            data: {
+              nome: lojaNome,
+              userId: userId,
+              rede: "Cometa" // Rede padrão para esta automação
+            }
+          });
+        }
+        lid = lojaDb.id;
+      }
 
       for (const item of vendasLoja) {
         contagemPorData[item.DATA] = (contagemPorData[item.DATA] || 0) + 1;
+        const eanLimpo = item.EAN ? String(item.EAN).replace(/"/g, '').trim().replace(/\D/g, '') : '';
         const chaveUnica = `venda-${lojaId}-${item.DATA}-${item.EAN}-${item.PLU || '0'}`;
         const valorUnitario = item.QTD > 0 ? item.VENDA / item.QTD : 0;
+
+        let mestreId: number | null = null;
+
+        if (isVictor && lid) {
+          // Buscar mapeamento ProdutoDePara para esta loja ou global (apenas para Victor)
+          const mapping = await (prisma as any).produtoDePara.findFirst({
+            where: {
+              codigo_api: eanLimpo,
+              userId: userId,
+              OR: [
+                { loja_id: lid },
+                { loja_id: null }
+              ]
+            }
+          });
+          mestreId = mapping?.produto_mestre_id || null;
+        }
 
         const parseDate = (dateStr: string) => {
           if (!dateStr) return new Date();
@@ -96,30 +141,62 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
 
         if (!existe) totalNovos++;
 
-        await prisma.venda.upsert({
-          where: { chave_unica: chaveUnica },
-          update: {
-            qtd: item.QTD,
-            venda: item.VENDA,
-            custo: item.CUSTO,
-            valor_unitario: valorUnitario,
-          },
-          create: {
-            loja: lojaId,
-            loja_nome: lojaNome,
-            ean: item.EAN,
-            plu: item.PLU ? Number(item.PLU) : null,
-            produto: item.PRODUTO,
-            qtd: item.QTD,
-            venda: item.VENDA,
-            custo: item.CUSTO,
-            cod_interno: item.COD_INTERNO,
-            origem: "API_VENDAS_V2",
-            chave_unica: chaveUnica,
-            valor_unitario: valorUnitario,
-            data: parseDate(item.DATA),
-          }
-        });
+        if (isVictor) {
+          await (prisma as any).venda.upsert({
+            where: { chave_unica: chaveUnica },
+            update: {
+              qtd: item.QTD,
+              venda: item.VENDA,
+              custo: item.CUSTO,
+              valor_unitario: valorUnitario,
+              loja_id: lid,
+              produto_mestre_id: mestreId
+            },
+            create: {
+              loja: lojaId,
+              loja_nome: lojaNome,
+              ean: item.EAN,
+              plu: item.PLU ? Number(item.PLU) : null,
+              produto: item.PRODUTO,
+              qtd: item.QTD,
+              venda: item.VENDA,
+              custo: item.CUSTO,
+              cod_interno: item.COD_INTERNO,
+              origem: "API_VENDAS_V2",
+              chave_unica: chaveUnica,
+              valor_unitario: valorUnitario,
+              data: parseDate(item.DATA),
+              userId: userId,
+              loja_id: lid,
+              produto_mestre_id: mestreId
+            }
+          });
+        } else {
+          await prisma.venda.upsert({
+            where: { chave_unica: chaveUnica },
+            update: {
+              qtd: item.QTD,
+              venda: item.VENDA,
+              custo: item.CUSTO,
+              valor_unitario: valorUnitario,
+            },
+            create: {
+              loja: lojaId,
+              loja_nome: lojaNome,
+              ean: item.EAN,
+              plu: item.PLU ? Number(item.PLU) : null,
+              produto: item.PRODUTO,
+              qtd: item.QTD,
+              venda: item.VENDA,
+              custo: item.CUSTO,
+              cod_interno: item.COD_INTERNO,
+              origem: "API_VENDAS_V2",
+              chave_unica: chaveUnica,
+              valor_unitario: valorUnitario,
+              data: parseDate(item.DATA),
+            }
+          });
+        }
         totalImportado++;
       }
     }
