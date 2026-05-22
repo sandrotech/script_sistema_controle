@@ -25,8 +25,8 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
   
   // Instanciar o cliente do Prisma correspondente ao banco/schema de destino
   const prisma = isVictor 
-    ? createPrismaClient(client.databaseUrl)
-    : createPrismaClientOld(client.databaseUrl);
+    ? createPrismaClient(process.env.DATABASE_URL || client.databaseUrl)
+    : createPrismaClientOld(process.env.DATABASE_URL || client.databaseUrl);
 
   try {
     // 1. Autenticação
@@ -72,6 +72,30 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
     let totalNovos = 0;
     const contagemPorData: Record<string, number> = {};
 
+    // Mapa em memória de código de filial física -> id da loja no banco (apenas Victor/Cometa)
+    const mapaLojasCometa = new Map<number, number>();
+    
+    if (isVictor && Array.isArray(dados)) {
+      console.log(`🔍 [${client.name}] Carregando lojas físicas da rede Cometa para correspondência inteligente...`);
+      const lojasDb = await (prisma as any).loja.findMany({
+        where: {
+          OR: [
+            { rede: "Cometa" },
+            { nome: { contains: "Cometa", mode: 'insensitive' } }
+          ]
+        }
+      });
+      
+      for (const loja of lojasDb) {
+        const match = loja.nome.match(/\d+/);
+        if (match) {
+          const cod = parseInt(match[0], 10);
+          mapaLojasCometa.set(cod, loja.id);
+        }
+      }
+      console.log(`   🏠 [${client.name}] ${mapaLojasCometa.size} lojas físicas mapeadas em memória.`);
+    }
+
     // 4. Salvar no Banco do Cliente
     for (const grupo of dados) {
       const lojaId = grupo.LOJA.LOJA;
@@ -82,22 +106,50 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
       let lid: number | undefined;
 
       if (isVictor) {
-        // Buscar ou criar a loja física no banco para obter o id da relação (apenas para Victor)
-        let lojaDb = await (prisma as any).loja.findFirst({
-          where: { nome: lojaNome, userId: userId }
-        });
-        
-        if (!lojaDb) {
-          console.log(`   🏠 [${client.name}] Criando Loja física no BD: "${lojaNome}"...`);
-          lojaDb = await (prisma as any).loja.create({
-            data: {
-              nome: lojaNome,
-              userId: userId,
-              rede: "Cometa" // Rede padrão para esta automação
-            }
-          });
+        // Extrair código físico do nome da loja retornado pela API ou do ID da loja
+        const match = lojaNome.match(/\d+/) || String(lojaId).match(/\d+/);
+        const codigoFisico = match ? parseInt(match[0], 10) : NaN;
+
+        if (!isNaN(codigoFisico)) {
+          lid = mapaLojasCometa.get(codigoFisico);
         }
-        lid = lojaDb.id;
+
+        if (!lid) {
+          // Buscar no BD de forma direta por segurança (verificando código no nome)
+          let lojaDb = null;
+          if (!isNaN(codigoFisico)) {
+            lojaDb = await (prisma as any).loja.findFirst({
+              where: {
+                OR: [
+                  { nome: lojaNome },
+                  { nome: { startsWith: `${String(codigoFisico).padStart(2, '0')} -` } },
+                  { nome: { startsWith: `${codigoFisico} -` } },
+                  { nome: { contains: ` - ${codigoFisico} - ` } }
+                ]
+              }
+            });
+          } else {
+            lojaDb = await (prisma as any).loja.findFirst({
+              where: { nome: lojaNome }
+            });
+          }
+
+          if (!lojaDb) {
+            console.log(`   🏠 [${client.name}] Criando Loja física global no BD: "${lojaNome}"...`);
+            lojaDb = await (prisma as any).loja.create({
+              data: {
+                nome: lojaNome,
+                userId: null, // Torna global/compartilhado
+                rede: "Cometa" // Rede padrão para esta automação
+              }
+            });
+          }
+          
+          lid = lojaDb.id;
+          if (!isNaN(codigoFisico)) {
+            mapaLojasCometa.set(codigoFisico, lid);
+          }
+        }
       }
 
       for (const item of vendasLoja) {
