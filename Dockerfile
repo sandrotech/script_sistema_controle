@@ -1,25 +1,30 @@
-# Usar a imagem oficial do Node.js
-FROM node:20-slim
+FROM node:20-alpine AS builder
 
-# Instalar dependências necessárias para o Prisma e PostgreSQL
-RUN apt-get update -y && apt-get install -y openssl
-
-# Criar diretório de trabalho
 WORKDIR /app
 
-# 1. Copiar arquivos de dependências da Raiz
+# Instala dependências de build necessárias para compilar pacotes do node
+RUN apk add --no-cache python3 make g++ git
+
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# 2. Instalar todas as dependências do Script
-RUN npm install
+RUN npm ci
 
-# 3. Gerar o Prisma Client
-RUN npx prisma generate
-
-# 4. Copiar o restante de todo o código
 COPY . .
 
-# Comando padrão para rodar o sincronismo global
-# Nota: No Coolify, você pode usar Scheduled Tasks para rodar cron jobs
-CMD ["tail", "-f", "/dev/null"]
+# Executa o postinstall para gerar os clientes Prisma (normal e antigo)
+RUN npm run postinstall
+
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Copia dependências e código necessário
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./
+
+# Comando para rodar a automação
+CMD ["npm", "start"]
