@@ -23,10 +23,16 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
   const apiUrl = process.env.VENDAS_API_URL || "https://vendas.cometasupermercados.com.br";
   const isVictor = client.apiEmail === 'victor@ultrarota.com.br';
   
+  // Em produção, usar sempre o banco de dados específico de cada cliente.
+  // Em desenvolvimento local, se DATABASE_URL estiver no .env, usamos para testes locais.
+  const dbUrl = process.env.NODE_ENV === 'production'
+    ? client.databaseUrl
+    : (process.env.DATABASE_URL || client.databaseUrl);
+
   // Instanciar o cliente do Prisma correspondente ao banco/schema de destino
   const prisma = isVictor 
-    ? createPrismaClient(process.env.DATABASE_URL || client.databaseUrl)
-    : createPrismaClientOld(process.env.DATABASE_URL || client.databaseUrl);
+    ? createPrismaClient(dbUrl)
+    : createPrismaClientOld(dbUrl);
 
   try {
     // 1. Autenticação
