@@ -25,7 +25,7 @@ export async function syncFrangolandiaUltraRota() {
     }
 
     try {
-        console.log("Conectando ao banco de dados Prisma...");
+        console.log(`Conectando ao banco de dados Prisma do cliente: ${clientConf.apiEmail}...`);
         const prisma = createPrismaClient(clientConf.databaseUrl);
 
         console.log("Iniciando conexão IMAP com o Google...");
@@ -52,8 +52,13 @@ export async function syncFrangolandiaUltraRota() {
         let totalImportado = 0;
 
         for (const msg of messages) {
+            console.log(`\n📧 Lendo e-mail recebido em: ${msg.attributes.date}`);
             const parts = imaps.getParts(msg.attributes.struct);
             const attachments = parts.filter(part => part.disposition && part.disposition.type.toUpperCase() === 'ATTACHMENT');
+
+            if (attachments.length === 0) {
+                console.log("Nenhum anexo encontrado neste e-mail.");
+            }
 
             for (const attachment of attachments) {
                 if (attachment.params && attachment.params.name && attachment.params.name.endsWith('.txt')) {
@@ -61,21 +66,25 @@ export async function syncFrangolandiaUltraRota() {
                     const textContent = partData.toString('utf-8');
                     
                     const lines = textContent.split('\n').filter(line => line.trim() !== '');
-                    console.log(`Lendo anexo ${attachment.params.name} com ${lines.length} linhas...`);
+                    console.log(`📎 Processando anexo: ${attachment.params.name} (${lines.length} linhas de produtos encontradas)`);
 
+                    let linhasInseridas = 0;
                     for (const line of lines) {
-                        const parts = line.split(';');
-                        if (parts.length < 6) continue;
+                        const partes = line.split(';');
+                        if (partes.length < 6) continue;
 
-                        const lojaStr = parts[0].trim(); // ex: 3879760000109
-                        // Extrai a filial do CNPJ (ex: 0001 -> 1)
-                        const lojaId = parseInt(lojaStr.substring(8, 12)) || 0;
+                        const [cnpjRaw, dataStr, pluRaw, produto, qtdRaw, vendaRaw] = partes;
                         
-                        const dataStr = parts[1].trim();
-                        const plu = parseInt(parts[2].trim());
-                        const produto = parts[3].trim();
-                        const qtd = parseFloat(parts[4].replace(',', '.'));
-                        const venda = parseFloat(parts[5].replace(',', '.'));
+                        // Extrai apenas os últimos 4 dígitos do CNPJ antes do último número (ex: 3879760000370 -> 0037 -> 37)
+                        const cnpjClean = cnpjRaw.replace(/\D/g, '');
+                        if (cnpjClean.length < 13) continue;
+                        
+                        const filialStr = cnpjClean.substring(8, 12);
+                        const lojaId = parseInt(filialStr, 10);
+                        
+                        const plu = parseInt(pluRaw, 10);
+                        const qtd = parseFloat(qtdRaw.replace(',', '.'));
+                        const venda = parseFloat(vendaRaw.replace(',', '.'));
 
                         const [day, month, year] = dataStr.split('/');
                         const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
@@ -103,14 +112,16 @@ export async function syncFrangolandiaUltraRota() {
                                 data: dateObj
                             }
                         });
-                        totalImportado++;
+                        linhasInseridas++;
                     }
+                    console.log(`✅ ${linhasInseridas} produtos importados/atualizados no banco da Ultra Rota.`);
+                    totalImportado += linhasInseridas;
                 }
             }
         }
 
         connection.end();
-        console.log(`✅ Sincronismo Frangolândia concluído. ${totalImportado} registros processados.`);
+        console.log(`\n🎉 Sincronismo concluído! Total geral de registros processados/inseridos: ${totalImportado}`);
     } catch (err) {
         console.error("❌ Erro no sincronismo Frangolândia:", err);
     } finally {
