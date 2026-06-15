@@ -112,5 +112,5 @@ export async function syncFrangolandiaUltraRota() {
 }
 
 if (require.main === module) {
-    syncFrangolandia().catch(console.error);
+    syncFrangolandiaUltraRota().catch(console.error);
 }
