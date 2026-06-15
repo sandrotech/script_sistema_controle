@@ -24,20 +24,27 @@ export async function syncFrangolandiaUltraRota() {
         throw new Error("⚠️ As variáveis de e-mail e/ou senha (FRANGOLANDIA_IMAP_USER / FRANGOLANDIA_IMAP_PASSWORD) não estão configuradas no arquivo .env!");
     }
 
-    const prisma = createPrismaClient(clientConf.databaseUrl);
-
     try {
+        console.log("Conectando ao banco de dados Prisma...");
+        const prisma = createPrismaClient(clientConf.databaseUrl);
+
+        console.log("Iniciando conexão IMAP com o Google...");
         const connection = await imaps.connect(config);
+        
+        console.log("Conexão IMAP estabelecida. Abrindo a caixa de entrada (INBOX)...");
         await connection.openBox('INBOX');
 
-        // Busca e-mails dos últimos 30 dias independentemente de terem sido lidos ou não
+        console.log("Caixa INBOX aberta. Calculando data de 30 dias atrás...");
         const trintaDiasAtras = new Date();
         trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+        
         const searchCriteria = [
             ['FROM', 'automatico@superfrangolandia.com.br'],
             ['SINCE', trintaDiasAtras]
         ];
         const fetchOptions = { bodies: ['HEADER', 'TEXT', ''], struct: true, markSeen: true };
+
+        console.log("Iniciando busca de e-mails com os critérios definidos...");
 
         const messages = await connection.search(searchCriteria, fetchOptions);
         console.log(`E-mails encontrados nos últimos 30 dias: ${messages.length}`);
