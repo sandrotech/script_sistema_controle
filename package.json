@@ -6,6 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "sync:vendas": "tsx src/syncVendas.ts",
+    "sync:periodo": "tsx src/syncPeriodo.ts",
     "sync:frangolandia-ultrarota": "tsx src/syncFrangolandiaUltraRota.ts",
     "sync:prod": "tsx src/main.ts",
     "api:start": "cd backend && tsx src/server.ts",
