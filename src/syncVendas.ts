@@ -160,7 +160,8 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
 
       for (const item of vendasLoja) {
         contagemPorData[item.DATA] = (contagemPorData[item.DATA] || 0) + 1;
-        const eanLimpo = item.EAN ? String(item.EAN).replace(/"/g, '').trim().replace(/\D/g, '') : '';
+        // Extrai apenas o primeiro EAN e remove caracteres não numéricos
+        const eanLimpo = item.EAN ? String(item.EAN).replace(/"/g, '').split(',')[0].replace(/\D/g, '').trim() : '';
         const chaveUnica = `venda-${lojaId}-${item.DATA}-${item.EAN}-${item.PLU || '0'}`;
         const valorUnitario = item.QTD > 0 ? item.VENDA / item.QTD : 0;
 
@@ -208,12 +209,13 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
               custo: item.CUSTO,
               valor_unitario: valorUnitario,
               loja_id: lid,
-              produto_mestre_id: mestreId
+              produto_mestre_id: mestreId,
+              ean: eanLimpo || String(item.EAN)
             },
             create: {
               loja: lojaId,
               loja_nome: lojaNome,
-              ean: item.EAN,
+              ean: eanLimpo || String(item.EAN),
               plu: item.PLU ? Number(item.PLU) : null,
               produto: item.PRODUTO,
               qtd: item.QTD,
@@ -237,11 +239,12 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
               venda: item.VENDA,
               custo: item.CUSTO,
               valor_unitario: valorUnitario,
+              ean: eanLimpo || String(item.EAN)
             },
             create: {
               loja: lojaId,
               loja_nome: lojaNome,
-              ean: item.EAN,
+              ean: eanLimpo || String(item.EAN),
               plu: item.PLU ? Number(item.PLU) : null,
               produto: item.PRODUTO,
               qtd: item.QTD,

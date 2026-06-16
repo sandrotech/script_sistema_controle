@@ -50,6 +50,7 @@ export async function syncFrangolandiaUltraRota() {
         console.log(`E-mails encontrados nos últimos 30 dias: ${messages.length}`);
 
         let totalImportado = 0;
+        const mapaLojasFrangolandia = new Map<number, number>();
 
         for (const msg of messages) {
             console.log(`\n📧 Lendo e-mail recebido em: ${msg.attributes.date}`);
@@ -92,15 +93,67 @@ export async function syncFrangolandiaUltraRota() {
                         const chaveUnica = `venda-${lojaId}-${dataStr}-${plu}-${plu}`;
                         const valorUnitario = qtd > 0 ? venda / qtd : 0;
 
+                        // MDM: Look up or create loja_id
+                        let lid = mapaLojasFrangolandia.get(lojaId);
+                        let lojaNome = `Frangolandia Filial ${lojaId}`; // fallback
+                        
+                        if (!lid) {
+                            const previousSale = await prisma.venda.findFirst({
+                                where: { loja: lojaId, loja_id: { not: null }, origem: "FRANGOLANDIA_EMAIL" },
+                                select: { loja_id: true, loja_nome: true },
+                                orderBy: { id: 'desc' }
+                            });
+                            
+                            if (previousSale && previousSale.loja_id) {
+                                lid = previousSale.loja_id;
+                                lojaNome = previousSale.loja_nome || lojaNome;
+                                mapaLojasFrangolandia.set(lojaId, lid);
+                            } else {
+                                let lojaDb = await (prisma as any).loja.findFirst({
+                                    where: { nome: lojaNome, rede: "Frangolandia" }
+                                });
+                                
+                                if (!lojaDb) {
+                                    console.log(`   🏠 Criando Loja Frangolândia no BD: "${lojaNome}"...`);
+                                    lojaDb = await (prisma as any).loja.create({
+                                        data: {
+                                            nome: lojaNome,
+                                            rede: "Frangolandia"
+                                        }
+                                    });
+                                }
+                                lid = lojaDb.id;
+                                mapaLojasFrangolandia.set(lojaId, lid);
+                            }
+                        }
+
+                        // MDM: Buscar mapeamento ProdutoDePara
+                        const mapping = await (prisma as any).produtoDePara.findFirst({
+                            where: {
+                                codigo_api: plu.toString(),
+                                userId: clientConf.apiEmail,
+                                OR: [
+                                    { loja_id: lid },
+                                    { loja_id: null }
+                                ]
+                            }
+                        });
+                        const mestreId = mapping?.produto_mestre_id || null;
+
                         await prisma.venda.upsert({
                             where: { chave_unica: chaveUnica },
                             update: {
                                 qtd,
                                 venda,
-                                valor_unitario: valorUnitario
+                                valor_unitario: valorUnitario,
+                                loja_id: lid,
+                                produto_mestre_id: mestreId,
+                                loja_nome: lojaNome,
+                                ean: plu.toString()
                             },
                             create: {
                                 loja: lojaId,
+                                loja_nome: lojaNome,
                                 ean: plu.toString(), // Salva o PLU no lugar do EAN
                                 plu: plu,
                                 produto: produto,
@@ -109,7 +162,10 @@ export async function syncFrangolandiaUltraRota() {
                                 origem: "FRANGOLANDIA_EMAIL",
                                 chave_unica: chaveUnica,
                                 valor_unitario: valorUnitario,
-                                data: dateObj
+                                data: dateObj,
+                                loja_id: lid,
+                                produto_mestre_id: mestreId,
+                                userId: clientConf.apiEmail
                             }
                         });
                         linhasInseridas++;
