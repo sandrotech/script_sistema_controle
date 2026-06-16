@@ -131,10 +131,9 @@ export async function syncFrangolandiaUltraRota() {
                         const mapping = await (prisma as any).produtoDePara.findFirst({
                             where: {
                                 codigo_api: plu.toString(),
-                                userId: clientConf.apiEmail,
-                                OR: [
-                                    { loja_id: lid },
-                                    { loja_id: null }
+                                AND: [
+                                    { OR: [{ userId: clientConf.apiEmail }, { userId: null }, { userId: '' }] },
+                                    { OR: [{ loja_id: lid }, { loja_id: null }] }
                                 ]
                             }
                         });

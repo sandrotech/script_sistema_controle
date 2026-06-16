@@ -172,10 +172,9 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
           const mapping = await (prisma as any).produtoDePara.findFirst({
             where: {
               codigo_api: eanLimpo,
-              userId: userId,
-              OR: [
-                { loja_id: lid },
-                { loja_id: null }
+              AND: [
+                { OR: [{ userId: userId }, { userId: null }, { userId: '' }] },
+                { OR: [{ loja_id: lid }, { loja_id: null }] }
               ]
             }
           });
