@@ -36,5 +36,12 @@ export const clients: ClientConfig[] = [
     apiEmail: "andredomaracuja@gmail.com",
     apiPassword: "Maracuja@andre2026@",
     databaseUrl: "postgres://postgres:9W50H3L55QbFaRrRLgHPmUuAXeMYiddYWEp0uDQWDBhE6bKbxQZqwZZxBpvsYy7i@co4c40cssgw4o4o0o8ksgoks:5432/postgres"
+  },
+  {
+    name: "Sthephanus Comercial",
+    apiEmail: "sthephanuscomercial@gmail.com",
+    apiPassword: "xJA9UCBJ^9FR",
+    databaseUrl: "postgres://postgres:oNAW5IxQ5TPCm8vPSyYpzzuiV7v5rDoY8xDW3ihwh24LQP8Hw66sRyqRX3ZjQryt@titum47socz3b79zvega3oot:5432/postgres"
   }
 ];
+

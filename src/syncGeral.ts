@@ -15,12 +15,32 @@ function getDateStr(daysAgo: number): string {
 async function main() {
   const args = process.argv.slice(2);
   
-  let startDateStr = args[0];
-  let endDateStr = args[1];
+  let clientFilter: string | undefined = undefined;
+  let startDateStr: string | undefined = undefined;
+  let endDateStr: string | undefined = undefined;
 
-  // Se não foi passada data inicial, define como 3 dias atrás por padrão (limite máximo da API)
+  const dateRegex = /^\d{2}[-/]\d{2}[-/]\d{4}$/;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--client' && i + 1 < args.length) {
+      clientFilter = args[++i];
+    } else if (arg.startsWith('--client=')) {
+      clientFilter = arg.split('=')[1];
+    } else if (dateRegex.test(arg)) {
+      if (!startDateStr) {
+        startDateStr = arg.replace(/\//g, '-');
+      } else if (!endDateStr) {
+        endDateStr = arg.replace(/\//g, '-');
+      }
+    } else {
+      clientFilter = arg;
+    }
+  }
+
+  // Se não foi passada data inicial, define como 7 dias atrás por padrão
   if (!startDateStr) {
-    startDateStr = getDateStr(3); // ex: 09-05-2026
+    startDateStr = getDateStr(7); // ex: 09-05-2026
   }
 
   // Se não foi passada data final, define como ontem (último dia consolidado)
@@ -28,15 +48,32 @@ async function main() {
     endDateStr = getDateStr(1); // ex: 11-05-2026
   }
 
-  console.log("🏁 INICIANDO PROCESSAMENTO MANUAL DE PERÍODO (MÁXIMO DE 3 DIAS)...");
+  // Filtrar clientes se solicitado
+  let targetClients = clients;
+  if (clientFilter) {
+    const query = clientFilter.toLowerCase().trim();
+    targetClients = clients.filter(c => 
+      c.name.toLowerCase().includes(query) || 
+      c.apiEmail.toLowerCase().includes(query)
+    );
+    
+    if (targetClients.length === 0) {
+      console.error(`❌ Nenhum cliente encontrado para o filtro: "${clientFilter}"`);
+      console.log(`💡 Clientes disponíveis: ${clients.map(c => c.name).join(', ')}`);
+      process.exit(1);
+    }
+    console.log(`🎯 Filtrando sincronismo apenas para: ${targetClients.map(c => c.name).join(', ')}`);
+  }
+
+  console.log("🏁 INICIANDO PROCESSAMENTO GERAL...");
   console.log(`📅 Período selecionado: ${startDateStr} até ${endDateStr}`);
-  console.log(`💡 Nota: A tabela da API de Vendas retém apenas os últimos 3 dias de histórico.`);
+  console.log(`💡 Nota: A tabela da API de Vendas retém os últimos dias de histórico.`);
   console.time("⏱️ Tempo Total");
 
   const results: string[] = [];
   let totalNovosGeral = 0;
 
-  for (const client of clients) {
+  for (const client of targetClients) {
     const res = await syncVendas(client, startDateStr, endDateStr);
     
     if (res.success) {
@@ -51,11 +88,11 @@ async function main() {
 
   // Relatório Final
   const report = `
-📊 *RELATÓRIO DE SINCRONISMO DO PERÍODO (${startDateStr} a ${endDateStr})*
+📊 *RELATÓRIO DE SINCRONISMO GERAL (${startDateStr} a ${endDateStr})*
 -----------------------------------------------------------
 ${results.join('\n')}
 -----------------------------------------------------------
-🚀 Sincronismo do Período Concluído!
+🚀 Sincronismo Geral Concluído!
   `;
 
   console.log(report);
@@ -72,6 +109,6 @@ ${results.join('\n')}
 }
 
 main().catch(err => {
-  console.error("💥 Erro crítico no processo de período:", err);
+  console.error("💥 Erro crítico no processo geral:", err);
   process.exit(1);
 });

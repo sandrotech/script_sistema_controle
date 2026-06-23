@@ -22,6 +22,8 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
 
   const apiUrl = process.env.VENDAS_API_URL || "https://vendas.cometasupermercados.com.br";
   const isVictor = client.apiEmail === 'victor@ultrarota.com.br';
+  const isNewSchema = isVictor || client.apiEmail === 'sthephanuscomercial@gmail.com';
+  const redeName = isVictor ? "Cometa" : "Sthephanus";
   
   // Em produção, usar sempre o banco de dados específico de cada cliente.
   // Em desenvolvimento local, se DATABASE_URL estiver no .env, usamos para testes locais.
@@ -30,7 +32,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
     : (process.env.DATABASE_URL || client.databaseUrl);
 
   // Instanciar o cliente do Prisma correspondente ao banco/schema de destino
-  const prisma = isVictor 
+  const prisma = isNewSchema 
     ? createPrismaClient(dbUrl)
     : createPrismaClientOld(dbUrl);
 
@@ -78,16 +80,16 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
     let totalNovos = 0;
     const contagemPorData: Record<string, number> = {};
 
-    // Mapa em memória de código de filial física -> id da loja no banco (apenas Victor/Cometa)
-    const mapaLojasCometa = new Map<number, number>();
+    // Mapa em memória de código de filial física -> id da loja no banco
+    const mapaLojas = new Map<number, number>();
     
-    if (isVictor && Array.isArray(dados)) {
-      console.log(`🔍 [${client.name}] Carregando lojas físicas da rede Cometa para correspondência inteligente...`);
+    if (isNewSchema && Array.isArray(dados)) {
+      console.log(`🔍 [${client.name}] Carregando lojas físicas da rede ${redeName} para correspondência inteligente...`);
       const lojasDb = await (prisma as any).loja.findMany({
         where: {
           OR: [
-            { rede: "Cometa" },
-            { nome: { contains: "Cometa", mode: 'insensitive' } }
+            { rede: redeName },
+            { nome: { contains: redeName, mode: 'insensitive' } }
           ]
         }
       });
@@ -96,10 +98,10 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
         const match = loja.nome.match(/\d+/);
         if (match) {
           const cod = parseInt(match[0], 10);
-          mapaLojasCometa.set(cod, loja.id);
+          mapaLojas.set(cod, loja.id);
         }
       }
-      console.log(`   🏠 [${client.name}] ${mapaLojasCometa.size} lojas físicas mapeadas em memória.`);
+      console.log(`   🏠 [${client.name}] ${mapaLojas.size} lojas físicas mapeadas em memória.`);
     }
 
     // 4. Salvar no Banco do Cliente
@@ -111,13 +113,13 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
 
       let lid: number | undefined;
 
-      if (isVictor) {
+      if (isNewSchema) {
         // Extrair código físico do nome da loja retornado pela API ou do ID da loja
         const match = lojaNome.match(/\d+/) || String(lojaId).match(/\d+/);
         const codigoFisico = match ? parseInt(match[0], 10) : NaN;
 
         if (!isNaN(codigoFisico)) {
-          lid = mapaLojasCometa.get(codigoFisico);
+          lid = mapaLojas.get(codigoFisico);
         }
 
         if (!lid) {
@@ -146,14 +148,14 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
               data: {
                 nome: lojaNome,
                 userId: null, // Torna global/compartilhado
-                rede: "Cometa" // Rede padrão para esta automação
+                rede: redeName // Rede padrão para esta automação
               }
             });
           }
           
           lid = lojaDb.id;
           if (!isNaN(codigoFisico)) {
-            mapaLojasCometa.set(codigoFisico, lid);
+            mapaLojas.set(codigoFisico, lid);
           }
         }
       }
@@ -167,8 +169,8 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
 
         let mestreId: number | null = null;
 
-        if (isVictor && lid) {
-          // Buscar mapeamento ProdutoDePara para esta loja ou global (apenas para Victor)
+        if (isNewSchema && lid) {
+          // Buscar mapeamento ProdutoDePara para esta loja ou global
           const mapping = await (prisma as any).produtoDePara.findFirst({
             where: {
               codigo_api: eanLimpo,
@@ -199,7 +201,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
 
         if (!existe) totalNovos++;
 
-        if (isVictor) {
+        if (isNewSchema) {
           await (prisma as any).venda.upsert({
             where: { chave_unica: chaveUnica },
             update: {
