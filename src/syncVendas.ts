@@ -227,7 +227,10 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
         }
 
         const existe = existingChaves.has(chaveUnica);
-        if (!existe) totalNovos++;
+        if (!existe) {
+          totalNovos++;
+          existingChaves.add(chaveUnica);
+        }
 
         if (isNewSchema) {
           uniqueWrites.set(chaveUnica, () => (prisma as any).venda.upsert({
