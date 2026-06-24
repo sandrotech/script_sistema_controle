@@ -8,7 +8,11 @@ import "dotenv/config";
  * Cria uma instância do Prisma conectada a um banco de dados específico (Schema MDM).
  */
 export function createPrismaClient(databaseUrl: string) {
-  const pool = new Pool({ connectionString: databaseUrl });
+  const pool = new Pool({ 
+    connectionString: databaseUrl,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 10000
+  });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
@@ -17,7 +21,11 @@ export function createPrismaClient(databaseUrl: string) {
  * Cria uma instância do Prisma conectada a um banco de dados específico (Schema Antigo).
  */
 export function createPrismaClientOld(databaseUrl: string) {
-  const pool = new Pool({ connectionString: databaseUrl });
+  const pool = new Pool({ 
+    connectionString: databaseUrl,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 10000
+  });
   const adapter = new PrismaPg(pool);
   return new PrismaClientOld({ adapter });
 }

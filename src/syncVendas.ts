@@ -80,9 +80,18 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
     let totalNovos = 0;
     const contagemPorData: Record<string, number> = {};
 
-    // Mapa em memória de código de filial física -> id da loja no banco
+    const parseDate = (dateStr: string) => {
+      if (!dateStr) return new Date();
+      const parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        return new Date(`${year}-${month}-${day}T12:00:00Z`);
+      }
+      return new Date(dateStr);
+    };
+
+    // 1. Carregar mapeamento de lojas físicas
     const mapaLojas = new Map<number, number>();
-    
     if (isNewSchema && Array.isArray(dados)) {
       console.log(`🔍 [${client.name}] Carregando lojas físicas da rede ${redeName} para correspondência inteligente...`);
       const lojasDb = await (prisma as any).loja.findMany({
@@ -103,6 +112,51 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
       }
       console.log(`   🏠 [${client.name}] ${mapaLojas.size} lojas físicas mapeadas em memória.`);
     }
+
+    // 2. Carregar mapeamento ProdutoDePara (MDM) em memória para evitar consultas em loop
+    const mappingMap = new Map<string, number>();
+    if (isNewSchema) {
+      console.log(`🔍 [${client.name}] Carregando mapeamentos de produto (ProdutoDePara)...`);
+      const mappings = await (prisma as any).produtoDePara.findMany({
+        where: {
+          OR: [
+            { userId: client.apiEmail },
+            { userId: null },
+            { userId: '' }
+          ]
+        }
+      });
+      
+      for (const m of mappings) {
+        const key = m.loja_id ? `${m.codigo_api}-${m.loja_id}` : m.codigo_api;
+        mappingMap.set(key, m.produto_mestre_id);
+      }
+      console.log(`   📦 [${client.name}] ${mappingMap.size} mapeamentos ProdutoDePara carregados em memória.`);
+    }
+
+    // 3. Carregar vendas existentes no período para evitar findUnique no loop
+    const existingChaves = new Set<string>();
+    try {
+      console.log(`🔍 [${client.name}] Carregando chaves de vendas existentes no período...`);
+      const existingVendas = await prisma.venda.findMany({
+        where: {
+          data: {
+            gte: parseDate(startDate),
+            lte: parseDate(endDate)
+          },
+          ...(isNewSchema ? { userId: client.apiEmail } : {})
+        },
+        select: { chave_unica: true }
+      });
+      for (const v of existingVendas) {
+        existingChaves.add(v.chave_unica);
+      }
+      console.log(`   📊 [${client.name}] ${existingChaves.size} vendas existentes em memória.`);
+    } catch (err: any) {
+      console.warn(`   ⚠️ [${client.name}] Não foi possível carregar chaves existentes (pode ser a primeira execução):`, err.message);
+    }
+
+    const uniqueWrites = new Map<string, () => Promise<any>>();
 
     // 4. Salvar no Banco do Cliente
     for (const grupo of dados) {
@@ -168,41 +222,15 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
         const valorUnitario = item.QTD > 0 ? item.VENDA / item.QTD : 0;
 
         let mestreId: number | null = null;
-
         if (isNewSchema && lid) {
-          // Buscar mapeamento ProdutoDePara para esta loja ou global
-          const mapping = await (prisma as any).produtoDePara.findFirst({
-            where: {
-              codigo_api: eanLimpo,
-              AND: [
-                { OR: [{ userId: userId }, { userId: null }, { userId: '' }] },
-                { OR: [{ loja_id: lid }, { loja_id: null }] }
-              ]
-            }
-          });
-          mestreId = mapping?.produto_mestre_id || null;
+          mestreId = mappingMap.get(`${eanLimpo}-${lid}`) || mappingMap.get(eanLimpo) || null;
         }
 
-        const parseDate = (dateStr: string) => {
-          if (!dateStr) return new Date();
-          const parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
-          if (parts.length === 3) {
-            const [day, month, year] = parts;
-            return new Date(`${year}-${month}-${day}T12:00:00Z`);
-          }
-          return new Date(dateStr);
-        };
-
-        // Verificar se já existe para contar novos
-        const existe = await prisma.venda.findUnique({
-          where: { chave_unica: chaveUnica },
-          select: { id: true }
-        });
-
+        const existe = existingChaves.has(chaveUnica);
         if (!existe) totalNovos++;
 
         if (isNewSchema) {
-          await (prisma as any).venda.upsert({
+          uniqueWrites.set(chaveUnica, () => (prisma as any).venda.upsert({
             where: { chave_unica: chaveUnica },
             update: {
               qtd: item.QTD,
@@ -231,9 +259,9 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
               loja_id: lid,
               produto_mestre_id: mestreId
             }
-          });
+          }));
         } else {
-          await prisma.venda.upsert({
+          uniqueWrites.set(chaveUnica, () => prisma.venda.upsert({
             where: { chave_unica: chaveUnica },
             update: {
               qtd: item.QTD,
@@ -257,9 +285,20 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
               valor_unitario: valorUnitario,
               data: parseDate(item.DATA),
             }
-          });
+          }));
         }
         totalImportado++;
+      }
+    }
+
+    // 5. Executar as gravações em lotes concorrentes (chunks)
+    if (uniqueWrites.size > 0) {
+      console.log(`💾 [${client.name}] Gravando ${uniqueWrites.size} registros únicos no banco de dados (lotes de 50)...`);
+      const writePromises = Array.from(uniqueWrites.values());
+      const chunkSize = 50;
+      for (let i = 0; i < writePromises.length; i += chunkSize) {
+        const chunk = writePromises.slice(i, i + chunkSize);
+        await Promise.all(chunk.map(fn => fn()));
       }
     }
 
