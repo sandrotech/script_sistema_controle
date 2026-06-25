@@ -70,12 +70,19 @@ async function main() {
   console.log(`💡 Nota: A tabela da API de Vendas retém os últimos dias de histórico.`);
   console.time("⏱️ Tempo Total");
 
+  console.log(`⚡ Sincronizando ${targetClients.length} clientes em paralelo...`);
+  
+  const resultsList = await Promise.all(
+    targetClients.map(async (client) => {
+      const res = await syncVendas(client, startDateStr, endDateStr);
+      return { client, res };
+    })
+  );
+
   const results: string[] = [];
   let totalNovosGeral = 0;
 
-  for (const client of targetClients) {
-    const res = await syncVendas(client, startDateStr, endDateStr);
-    
+  for (const { client, res } of resultsList) {
     if (res.success) {
       const novos = res.newRecords || 0;
       totalNovosGeral += novos;

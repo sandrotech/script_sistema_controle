@@ -135,10 +135,10 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
     }
 
     // 3. Carregar vendas existentes no período para evitar findUnique no loop
-    const existingChaves = new Set<string>();
+    const existingVendasMap = new Map<string, { qtd: number, venda: number }>();
     try {
-      console.log(`🔍 [${client.name}] Carregando chaves de vendas existentes no período...`);
-      const existingVendas = await prisma.venda.findMany({
+      console.log(`🔍 [${client.name}] Carregando vendas existentes no período...`);
+      const existingVendas = await (prisma as any).venda.findMany({
         where: {
           data: {
             gte: parseDate(startDate),
@@ -146,14 +146,17 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
           },
           ...(isNewSchema ? { userId: client.apiEmail } : {})
         },
-        select: { chave_unica: true }
+        select: { chave_unica: true, qtd: true, venda: true }
       });
       for (const v of existingVendas) {
-        existingChaves.add(v.chave_unica);
+        existingVendasMap.set(v.chave_unica, { 
+          qtd: Number(v.qtd) || 0, 
+          venda: Number(v.venda) || 0 
+        });
       }
-      console.log(`   📊 [${client.name}] ${existingChaves.size} vendas existentes em memória.`);
+      console.log(`   📊 [${client.name}] ${existingVendasMap.size} vendas existentes em memória.`);
     } catch (err: any) {
-      console.warn(`   ⚠️ [${client.name}] Não foi possível carregar chaves existentes (pode ser a primeira execução):`, err.message);
+      console.warn(`   ⚠️ [${client.name}] Não foi possível carregar vendas existentes (pode ser a primeira execução):`, err.message);
     }
 
     const uniqueWrites = new Map<string, () => Promise<any>>();
@@ -209,7 +212,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
           
           lid = lojaDb.id;
           if (!isNaN(codigoFisico)) {
-            mapaLojas.set(codigoFisico, lid);
+            mapaLojas.set(codigoFisico, lid as number);
           }
         }
       }
@@ -226,69 +229,73 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
           mestreId = mappingMap.get(`${eanLimpo}-${lid}`) || mappingMap.get(eanLimpo) || null;
         }
 
-        const existe = existingChaves.has(chaveUnica);
-        if (!existe) {
-          totalNovos++;
-          existingChaves.add(chaveUnica);
-        }
+        const existingRecord = existingVendasMap.get(chaveUnica);
+        const needsUpdate = !existingRecord || existingRecord.qtd !== item.QTD || existingRecord.venda !== item.VENDA;
+        
+        if (needsUpdate) {
+          if (!existingRecord) {
+            totalNovos++;
+          }
+          existingVendasMap.set(chaveUnica, { qtd: item.QTD, venda: item.VENDA });
 
-        if (isNewSchema) {
-          uniqueWrites.set(chaveUnica, () => (prisma as any).venda.upsert({
-            where: { chave_unica: chaveUnica },
-            update: {
-              qtd: item.QTD,
-              venda: item.VENDA,
-              custo: item.CUSTO,
-              valor_unitario: valorUnitario,
-              loja_id: lid,
-              produto_mestre_id: mestreId,
-              ean: eanLimpo || String(item.EAN)
-            },
-            create: {
-              loja: lojaId,
-              loja_nome: lojaNome,
-              ean: eanLimpo || String(item.EAN),
-              plu: item.PLU ? Number(item.PLU) : null,
-              produto: item.PRODUTO,
-              qtd: item.QTD,
-              venda: item.VENDA,
-              custo: item.CUSTO,
-              cod_interno: item.COD_INTERNO,
-              origem: "API_VENDAS_V2",
-              chave_unica: chaveUnica,
-              valor_unitario: valorUnitario,
-              data: parseDate(item.DATA),
-              userId: userId,
-              loja_id: lid,
-              produto_mestre_id: mestreId
-            }
-          }));
-        } else {
-          uniqueWrites.set(chaveUnica, () => prisma.venda.upsert({
-            where: { chave_unica: chaveUnica },
-            update: {
-              qtd: item.QTD,
-              venda: item.VENDA,
-              custo: item.CUSTO,
-              valor_unitario: valorUnitario,
-              ean: eanLimpo || String(item.EAN)
-            },
-            create: {
-              loja: lojaId,
-              loja_nome: lojaNome,
-              ean: eanLimpo || String(item.EAN),
-              plu: item.PLU ? Number(item.PLU) : null,
-              produto: item.PRODUTO,
-              qtd: item.QTD,
-              venda: item.VENDA,
-              custo: item.CUSTO,
-              cod_interno: item.COD_INTERNO,
-              origem: "API_VENDAS_V2",
-              chave_unica: chaveUnica,
-              valor_unitario: valorUnitario,
-              data: parseDate(item.DATA),
-            }
-          }));
+          if (isNewSchema) {
+            uniqueWrites.set(chaveUnica, () => (prisma as any).venda.upsert({
+              where: { chave_unica: chaveUnica },
+              update: {
+                qtd: item.QTD,
+                venda: item.VENDA,
+                custo: item.CUSTO,
+                valor_unitario: valorUnitario,
+                loja_id: lid,
+                produto_mestre_id: mestreId,
+                ean: eanLimpo || String(item.EAN)
+              },
+              create: {
+                loja: lojaId,
+                loja_nome: lojaNome,
+                ean: eanLimpo || String(item.EAN),
+                plu: item.PLU ? Number(item.PLU) : null,
+                produto: item.PRODUTO,
+                qtd: item.QTD,
+                venda: item.VENDA,
+                custo: item.CUSTO,
+                cod_interno: item.COD_INTERNO,
+                origem: "API_VENDAS_V2",
+                chave_unica: chaveUnica,
+                valor_unitario: valorUnitario,
+                data: parseDate(item.DATA),
+                userId: userId,
+                loja_id: lid,
+                produto_mestre_id: mestreId
+              }
+            }));
+          } else {
+            uniqueWrites.set(chaveUnica, () => (prisma as any).venda.upsert({
+              where: { chave_unica: chaveUnica },
+              update: {
+                qtd: item.QTD,
+                venda: item.VENDA,
+                custo: item.CUSTO,
+                valor_unitario: valorUnitario,
+                ean: eanLimpo || String(item.EAN)
+              },
+              create: {
+                loja: lojaId,
+                loja_nome: lojaNome,
+                ean: eanLimpo || String(item.EAN),
+                plu: item.PLU ? Number(item.PLU) : null,
+                produto: item.PRODUTO,
+                qtd: item.QTD,
+                venda: item.VENDA,
+                custo: item.CUSTO,
+                cod_interno: item.COD_INTERNO,
+                origem: "API_VENDAS_V2",
+                chave_unica: chaveUnica,
+                valor_unitario: valorUnitario,
+                data: parseDate(item.DATA),
+              }
+            }));
+          }
         }
         totalImportado++;
       }
