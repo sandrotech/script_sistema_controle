@@ -227,6 +227,42 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
         let mestreId: number | null = null;
         if (isNewSchema && lid) {
           mestreId = mappingMap.get(`${eanLimpo}-${lid}`) || mappingMap.get(eanLimpo) || null;
+
+          // Se não houver mapeamento para o EAN limpo, autocadastra o Produto Mestre e cria o De/Para
+          if (!mestreId && eanLimpo) {
+            let pm = await (prisma as any).produtoMestre.findFirst({
+              where: { codigo: eanLimpo, userId: null }
+            });
+
+            if (!pm) {
+              console.log(`   📦 [${client.name}] Autocadastro de Produto Mestre: "${item.PRODUTO}" (Código/EAN: ${eanLimpo})`);
+              pm = await (prisma as any).produtoMestre.create({
+                data: {
+                  codigo: eanLimpo,
+                  nome: item.PRODUTO,
+                  categoria: 'Autocadastro',
+                  userId: null
+                }
+              });
+            }
+
+            try {
+              await (prisma as any).produtoDePara.create({
+                data: {
+                  codigo_api: eanLimpo,
+                  loja_id: null,
+                  produto_mestre_id: pm.id,
+                  userId: null
+                }
+              });
+            } catch (err: any) {
+              // Ignora erro se outro processo inseriu ao mesmo tempo
+              console.warn(`   ⚠️ [${client.name}] Mapeamento De/Para já existente para o EAN: ${eanLimpo}`);
+            }
+
+            mestreId = pm.id;
+            mappingMap.set(eanLimpo, mestreId);
+          }
         }
 
         const existingRecord = existingVendasMap.get(chaveUnica);
