@@ -22,8 +22,10 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
 
   const apiUrl = process.env.VENDAS_API_URL || "https://vendas.cometasupermercados.com.br";
   const isVictor = client.apiEmail === 'victor@ultrarota.com.br';
-  const isNewSchema = isVictor || client.apiEmail === 'sthephanuscomercial@gmail.com';
-  const redeName = isVictor ? "Cometa" : "Sthephanus";
+  const isSthephanus = client.apiEmail === 'sthephanuscomercial@gmail.com';
+  const isSequilhos = client.apiEmail === 'sequilhospaulista.relatorio@gmail.com';
+  const isNewSchema = isVictor || isSthephanus || isSequilhos;
+  const redeName = isVictor ? "Cometa" : (isSthephanus ? "Sthephanus" : (isSequilhos ? "Sequilhos Paulista" : client.name));
   
   // Em produção, usar sempre o banco de dados específico de cada cliente.
   // Em desenvolvimento local, se DATABASE_URL estiver no .env, usamos para testes locais.
