@@ -12,6 +12,25 @@ function getDateStr(daysAgo: number): string {
   return `${dd}-${mm}-${yyyy}`;
 }
 
+async function syncVendasWithRetry(client: any, startDate: string, endDate: string, maxRetries = 3, delayMs = 5000) {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    attempt++;
+    const res = await syncVendas(client, startDate, endDate);
+    if (res.success) {
+      return res;
+    }
+    if (attempt < maxRetries) {
+      console.warn(`⚠️ [${client.name}] Falha na tentativa ${attempt}/${maxRetries}: ${res.error || 'Erro desconhecido'}. Tentando novamente em ${delayMs/1000}s...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    } else {
+      console.error(`❌ [${client.name}] Falha definitiva após ${maxRetries} tentativas.`);
+      return res;
+    }
+  }
+  return { success: false, error: 'Falha desconhecida' };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   
@@ -74,7 +93,7 @@ async function main() {
   
   const resultsList = await Promise.all(
     targetClients.map(async (client) => {
-      const res = await syncVendas(client, startDateStr, endDateStr);
+      const res = await syncVendasWithRetry(client, startDateStr!, endDateStr!);
       return { client, res };
     })
   );
