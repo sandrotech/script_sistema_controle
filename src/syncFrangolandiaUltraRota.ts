@@ -77,8 +77,8 @@ export async function syncFrangolandiaUltraRota() {
                         const [cnpjRaw, dataStr, pluRaw, produto, qtdRaw, vendaRaw] = partes;
                         
                         // Extrai apenas os últimos 4 dígitos do CNPJ antes do último número (ex: 3879760000370 -> 0037 -> 37)
-                        const cnpjClean = cnpjRaw.replace(/\D/g, '');
-                        if (cnpjClean.length < 13) continue;
+                        const cnpjClean = cnpjRaw.replace(/\D/g, '').padStart(14, '0');
+                        if (cnpjClean.length < 14) continue;
                         
                         const filialStr = cnpjClean.substring(8, 12);
                         const lojaId = parseInt(filialStr, 10);
