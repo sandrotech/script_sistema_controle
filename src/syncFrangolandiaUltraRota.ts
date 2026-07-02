@@ -1,6 +1,7 @@
 import imaps from 'imap-simple';
 import { createPrismaClient } from './lib/prisma';
 import { clients } from './config/clients';
+import { frangolandiaLojas } from './config/frangolandiaLojas';
 import "dotenv/config";
 
 const config = {
@@ -24,12 +25,14 @@ export async function syncFrangolandiaUltraRota(diasConfig?: number) {
         throw new Error("⚠️ As variáveis de e-mail e/ou senha (FRANGOLANDIA_IMAP_USER / FRANGOLANDIA_IMAP_PASSWORD) não estão configuradas no arquivo .env!");
     }
 
-    // Se não for passado pela função, tenta pegar do argumento do terminal (process.argv) ou assume 3 como padrão
-    const diasParaTras = diasConfig || parseInt(process.argv[2], 10) || 3;
+    // Procura por qualquer argumento numérico no process.argv para definir os dias, ou assume 3 como padrão
+    const argDias = process.argv.find(arg => /^\d+$/.test(arg));
+    const diasParaTras = diasConfig || (argDias ? parseInt(argDias, 10) : 3);
 
+    let prisma: any = null;
     try {
         console.log(`Conectando ao banco de dados Prisma do cliente: ${clientConf.apiEmail}...`);
-        const prisma = createPrismaClient(clientConf.databaseUrl);
+        prisma = createPrismaClient(clientConf.databaseUrl);
 
         console.log("Iniciando conexão IMAP com o Google...");
         const connection = await imaps.connect(config);
@@ -99,33 +102,59 @@ export async function syncFrangolandiaUltraRota(diasConfig?: number) {
                         // MDM: Look up or create loja_id
                         let lid = mapaLojasFrangolandia.get(lojaId);
                         let lojaNome = `Frangolandia Filial ${lojaId}`; // fallback
+
+                        // Tenta obter o nome oficial do cadastro
+                        const matchedCadastro = frangolandiaLojas.find(f => {
+                            const clean = f.cnpj.replace(/\D/g, '').padStart(14, '0');
+                            return clean === cnpjClean;
+                        });
+                        if (matchedCadastro) {
+                            lojaNome = matchedCadastro.nome;
+                        }
                         
                         if (!lid) {
-                            const previousSale = await prisma.venda.findFirst({
-                                where: { loja: lojaId, loja_id: { not: null }, origem: "FRANGOLANDIA_EMAIL" },
-                                select: { loja_id: true, loja_nome: true },
-                                orderBy: { id: 'desc' }
+                            // 1. Tenta buscar pelo CNPJ para associar à loja oficial cadastrada
+                            let lojaDb = await prisma.loja.findFirst({
+                                where: { cnpj: cnpjClean }
                             });
-                            
-                            if (previousSale && previousSale.loja_id) {
-                                lid = previousSale.loja_id;
-                                lojaNome = previousSale.loja_nome || lojaNome;
-                                mapaLojasFrangolandia.set(lojaId, lid);
-                            } else {
-                                let lojaDb = await (prisma as any).loja.findFirst({
-                                    where: { nome: lojaNome, rede: "Frangolandia" }
+
+                            if (!lojaDb) {
+                                // 2. Tenta buscar por uma venda anterior para pegar o ID da loja associada
+                                const previousSale = await prisma.venda.findFirst({
+                                    where: { loja: lojaId, loja_id: { not: null }, origem: "FRANGOLANDIA_EMAIL" },
+                                    select: { loja_id: true, loja_nome: true },
+                                    orderBy: { id: 'desc' }
                                 });
                                 
-                                if (!lojaDb) {
-                                    console.log(`   🏠 Criando Loja Frangolândia no BD: "${lojaNome}"...`);
-                                    lojaDb = await (prisma as any).loja.create({
-                                        data: {
-                                            nome: lojaNome,
-                                            rede: "Frangolandia"
-                                        }
+                                if (previousSale && previousSale.loja_id) {
+                                    lid = previousSale.loja_id;
+                                    lojaNome = previousSale.loja_nome || lojaNome;
+                                    mapaLojasFrangolandia.set(lojaId, lid);
+                                } else {
+                                    // 3. Busca pelo nome/rede
+                                    lojaDb = await prisma.loja.findFirst({
+                                        where: { nome: lojaNome, rede: "Frangolandia" }
                                     });
                                 }
+                            }
+
+                            if (!lojaDb && !lid) {
+                                // 4. Se ainda assim não existir, cria a loja
+                                console.log(`   🏠 Criando Loja Frangolândia no BD: "${lojaNome}"...`);
+                                lojaDb = await prisma.loja.create({
+                                    data: {
+                                        nome: lojaNome,
+                                        rede: "Frangolandia",
+                                        cnpj: cnpjClean
+                                    }
+                                });
+                            }
+
+                            if (lojaDb) {
                                 lid = lojaDb.id;
+                                lojaNome = lojaDb.nome || lojaNome;
+                            }
+                            if (lid) {
                                 mapaLojasFrangolandia.set(lojaId, lid);
                             }
                         }
@@ -183,7 +212,9 @@ export async function syncFrangolandiaUltraRota(diasConfig?: number) {
     } catch (err) {
         console.error("❌ Erro no sincronismo Frangolândia:", err);
     } finally {
-        await prisma.$disconnect();
+        if (prisma) {
+            await prisma.$disconnect();
+        }
     }
 }
 
