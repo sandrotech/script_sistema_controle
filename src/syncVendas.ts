@@ -25,7 +25,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
   const isSthephanus = client.apiEmail === 'sthephanuscomercial@gmail.com';
   const isSequilhos = client.apiEmail === 'sequilhospaulista.relatorio@gmail.com';
   const isNewSchema = isVictor || isSthephanus || isSequilhos;
-  const redeName = isVictor ? "Cometa" : (isSthephanus ? "Sthephanus" : (isSequilhos ? "Sequilhos Paulista" : client.name));
+  const redeName = isVictor ? "Cometa" : (isSthephanus ? "Cometa" : (isSequilhos ? "Cometa" : client.name));
   
   // Em produção, usar sempre o banco de dados específico de cada cliente.
   // Em desenvolvimento local, se DATABASE_URL estiver no .env, usamos para testes locais.
@@ -223,7 +223,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
         contagemPorData[item.DATA] = (contagemPorData[item.DATA] || 0) + 1;
         // Extrai apenas o primeiro EAN e remove caracteres não numéricos
         const eanLimpo = item.EAN ? String(item.EAN).replace(/"/g, '').split(',')[0].replace(/\D/g, '').trim() : '';
-        const chaveUnica = `venda-${lojaId}-${item.DATA}-${item.EAN}-${item.PLU || '0'}`;
+        const chaveUnica = `venda-${lojaId}-${item.DATA}-${eanLimpo}-${item.PLU || '0'}`;
         const valorUnitario = item.QTD > 0 ? item.VENDA / item.QTD : 0;
 
         let mestreId: number | null = null;

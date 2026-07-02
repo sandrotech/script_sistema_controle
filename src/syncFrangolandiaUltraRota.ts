@@ -15,7 +15,7 @@ const config = {
     }
 };
 
-export async function syncFrangolandiaUltraRota() {
+export async function syncFrangolandiaUltraRota(diasConfig?: number) {
     console.log("Iniciando sincronismo Frangolândia (Ultra Rota) via E-mail...");
     const clientConf = clients.find(c => c.apiEmail === 'victor@ultrarota.com.br');
     if (!clientConf) throw new Error("Cliente Ultra Rota não configurado.");
@@ -23,6 +23,9 @@ export async function syncFrangolandiaUltraRota() {
     if (!config.imap.user || !config.imap.password) {
         throw new Error("⚠️ As variáveis de e-mail e/ou senha (FRANGOLANDIA_IMAP_USER / FRANGOLANDIA_IMAP_PASSWORD) não estão configuradas no arquivo .env!");
     }
+
+    // Se não for passado pela função, tenta pegar do argumento do terminal (process.argv) ou assume 3 como padrão
+    const diasParaTras = diasConfig || parseInt(process.argv[2], 10) || 3;
 
     try {
         console.log(`Conectando ao banco de dados Prisma do cliente: ${clientConf.apiEmail}...`);
@@ -34,20 +37,20 @@ export async function syncFrangolandiaUltraRota() {
         console.log("Conexão IMAP estabelecida. Abrindo a caixa de entrada (INBOX)...");
         await connection.openBox('INBOX');
 
-        console.log("Caixa INBOX aberta. Calculando data de 30 dias atrás...");
-        const trintaDiasAtras = new Date();
-        trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+        console.log(`Caixa INBOX aberta. Calculando data de ${diasParaTras} dias atrás...`);
+        const dataFiltro = new Date();
+        dataFiltro.setDate(dataFiltro.getDate() - diasParaTras);
         
         const searchCriteria = [
             ['FROM', 'automatico@superfrangolandia.com.br'],
-            ['SINCE', trintaDiasAtras]
+            ['SINCE', dataFiltro]
         ];
         const fetchOptions = { bodies: ['HEADER', 'TEXT', ''], struct: true, markSeen: true };
 
         console.log("Iniciando busca de e-mails com os critérios definidos...");
 
         const messages = await connection.search(searchCriteria, fetchOptions);
-        console.log(`E-mails encontrados nos últimos 30 dias: ${messages.length}`);
+        console.log(`E-mails encontrados nos últimos ${diasParaTras} dias: ${messages.length}`);
 
         let totalImportado = 0;
         const mapaLojasFrangolandia = new Map<number, number>();
