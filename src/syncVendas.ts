@@ -219,11 +219,33 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
         }
       }
 
+      // Agrupar em memória os registros duplicados retornados pela API (mesma loja, data, EAN, PLU)
+      const vendasAgrupadas = new Map<string, any>();
       for (const item of vendasLoja) {
-        contagemPorData[item.DATA] = (contagemPorData[item.DATA] || 0) + 1;
-        // Extrai apenas o primeiro EAN e remove caracteres não numéricos
         const eanLimpo = item.EAN ? String(item.EAN).replace(/"/g, '').split(',')[0].replace(/\D/g, '').trim() : '';
         const chaveUnica = `venda-${lojaId}-${item.DATA}-${eanLimpo}-${item.PLU || '0'}`;
+        
+        if (vendasAgrupadas.has(chaveUnica)) {
+          const existente = vendasAgrupadas.get(chaveUnica);
+          existente.QTD += Number(item.QTD || 0);
+          existente.VENDA += Number(item.VENDA || 0);
+          existente.CUSTO = Number(existente.CUSTO || 0) + Number(item.CUSTO || 0);
+        } else {
+          vendasAgrupadas.set(chaveUnica, {
+            ...item,
+            QTD: Number(item.QTD || 0),
+            VENDA: Number(item.VENDA || 0),
+            CUSTO: Number(item.CUSTO || 0),
+            eanLimpo,
+            chaveUnica
+          });
+        }
+      }
+
+      for (const item of vendasAgrupadas.values()) {
+        contagemPorData[item.DATA] = (contagemPorData[item.DATA] || 0) + 1;
+        const eanLimpo = item.eanLimpo;
+        const chaveUnica = item.chaveUnica;
         const valorUnitario = item.QTD > 0 ? item.VENDA / item.QTD : 0;
 
         let mestreId: number | null = null;
