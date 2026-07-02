@@ -152,6 +152,16 @@ export async function syncFrangolandiaUltraRota(diasConfig?: number) {
 
                             if (lojaDb) {
                                 lid = lojaDb.id;
+                                // Garante que a loja no banco fique com o CNPJ e Nome Oficial atualizados se houver divergência
+                                if (lojaDb.cnpj !== cnpjClean || (matchedCadastro && lojaDb.nome !== matchedCadastro.nome)) {
+                                    lojaDb = await prisma.loja.update({
+                                        where: { id: lojaDb.id },
+                                        data: {
+                                            cnpj: cnpjClean,
+                                            nome: matchedCadastro ? matchedCadastro.nome : lojaDb.nome
+                                        }
+                                    });
+                                }
                                 lojaNome = lojaDb.nome || lojaNome;
                             }
                             if (lid) {
