@@ -47,6 +47,23 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
     ? createPrismaClient(dbUrl)
     : createPrismaClientOld(dbUrl);
 
+  if (isNewSchema) {
+    try {
+      const tenantId = client.apiEmail;
+      await (prisma as any).tenant.upsert({
+        where: { id: tenantId },
+        update: {},
+        create: {
+          id: tenantId,
+          nome: client.name,
+          email_api: client.apiEmail
+        }
+      });
+    } catch (err: any) {
+      console.warn(`⚠️ [${client.name}] Falha ao garantir existência do Tenant no banco:`, err.message);
+    }
+  }
+
   try {
     // 1. Autenticação
     console.log(`🔑 [${client.name}] Autenticando...`);

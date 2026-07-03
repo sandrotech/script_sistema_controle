@@ -34,6 +34,17 @@ export async function syncFrangolandiaUltraRota(diasConfig?: number) {
         console.log(`Conectando ao banco de dados Prisma do cliente: ${clientConf.apiEmail}...`);
         prisma = createPrismaClient(clientConf.databaseUrl);
 
+        // Garantir que o Tenant existe no banco de dados
+        await (prisma as any).tenant.upsert({
+            where: { id: clientConf.apiEmail },
+            update: {},
+            create: {
+                id: clientConf.apiEmail,
+                nome: clientConf.name,
+                email_api: clientConf.apiEmail
+            }
+        });
+
         console.log("Iniciando conexão IMAP com o Google...");
         const connection = await imaps.connect(config);
         
@@ -145,7 +156,8 @@ export async function syncFrangolandiaUltraRota(diasConfig?: number) {
                                     data: {
                                         nome: lojaNome,
                                         rede: "Frangolandia",
-                                        cnpj: cnpjClean
+                                        cnpj: cnpjClean,
+                                        tenant_id: clientConf.apiEmail
                                     }
                                 });
                             }
@@ -173,10 +185,8 @@ export async function syncFrangolandiaUltraRota(diasConfig?: number) {
                         const mapping = await (prisma as any).produtoDePara.findFirst({
                             where: {
                                 codigo_api: plu.toString(),
-                                AND: [
-                                    { OR: [{ userId: clientConf.apiEmail }, { userId: null }, { userId: '' }] },
-                                    { OR: [{ loja_id: lid }, { loja_id: null }] }
-                                ]
+                                tenant_id: clientConf.apiEmail,
+                                OR: [{ loja_id: lid }, { loja_id: null }]
                             }
                         });
                         const mestreId = mapping?.produto_mestre_id || null;
@@ -206,7 +216,7 @@ export async function syncFrangolandiaUltraRota(diasConfig?: number) {
                                 data: dateObj,
                                 loja_id: lid,
                                 produto_mestre_id: mestreId,
-                                userId: clientConf.apiEmail
+                                tenant_id: clientConf.apiEmail
                             }
                         });
                         linhasInseridas++;
