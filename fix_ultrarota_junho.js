@@ -123,9 +123,11 @@ async function main() {
     return;
   }
 
-  console.log('\n📥 Inserindo dados corretos da API...');
+  const TENANT_ID = 'victor@ultrarota.com.br';
+  console.log(`\n📥 Inserindo ${apiVendasFlat.length} registros corretos da API (tenant: ${TENANT_ID})...`);
   let inserted = 0;
   let errors = 0;
+  let firstError = null;
   const client = await pool.connect();
   try {
     for (const v of apiVendasFlat) {
@@ -133,30 +135,37 @@ async function main() {
         const [dd, mm, yyyy] = (v.DATA || '').split('/');
         const dataIso = `${yyyy}-${mm}-${dd}T12:00:00Z`;
         const ean = v.EAN ? String(v.EAN).replace(/"/g, '').split(',')[0].replace(/\D/g, '').trim() : '';
+        const plu = v.PLU || '0';
+        const chaveUnica = `venda-${v.lojaId}-${v.DATA}-${ean}-${plu}`;
         await client.query(
-          `INSERT INTO vendas (loja, data, ean, plu, produto, qtd, venda, custo, cod_interno, origem)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'API_VENDAS_V2')`,
+          `INSERT INTO vendas (loja, data, ean, plu, produto, qtd, venda, custo, cod_interno, origem, tenant_id, chave_unica)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'API_VENDAS_V2', $10, $11)
+           ON CONFLICT (chave_unica) DO NOTHING`,
           [
             v.lojaId,
             dataIso,
             ean,
-            v.PLU || '0',
+            parseInt(plu) || 0,
             v.PRODUTO || '',
             Number(v.QTD || 0),
             Number(v.VENDA || 0),
             Number(v.CUSTO || 0),
-            v.COD_INTERNO || ''
+            v.COD_INTERNO || '',
+            TENANT_ID,
+            chaveUnica
           ]
         );
         inserted++;
       } catch (e) {
         errors++;
+        if (!firstError) firstError = e.message;
       }
     }
   } finally {
     client.release();
   }
 
+  if (firstError) console.log(`   ⚠️  Primeiro erro de inserção: ${firstError}`);
   console.log(`   ✅ Inseridos: ${inserted} | Erros: ${errors}`);
 
   // ── VERIFICAÇÃO FINAL ───────────────────────────────────────────
