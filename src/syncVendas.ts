@@ -35,11 +35,12 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
   const redeName = "Cometa Supermercados";
 
   
-  // Em produção, usar sempre o banco de dados específico de cada cliente.
-  // Em desenvolvimento local, se DATABASE_URL estiver no .env, usamos para testes locais.
-  const dbUrl = process.env.NODE_ENV === 'production'
-    ? client.databaseUrl
-    : (process.env.DATABASE_URL || client.databaseUrl);
+  // Na nova arquitetura Multi-Tenant, usamos SEMPRE o banco unificado.
+  const dbUrl = process.env.DATABASE_URL;
+  
+  if (!dbUrl) {
+    throw new Error("DATABASE_URL não configurado no .env");
+  }
 
   // Instanciar o cliente do Prisma correspondente ao banco/schema de destino
   const prisma = isNewSchema 
@@ -106,6 +107,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
       console.log(`🔍 [${client.name}] Carregando lojas físicas da rede ${redeName} para correspondência inteligente...`);
       const lojasDb = await (prisma as any).loja.findMany({
         where: {
+          tenant_id: client.apiEmail,
           OR: [
             { rede: redeName },
             { nome: { contains: redeName, mode: 'insensitive' } }
@@ -128,13 +130,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
     if (isNewSchema) {
       console.log(`🔍 [${client.name}] Carregando mapeamentos de produto (ProdutoDePara)...`);
       const mappings = await (prisma as any).produtoDePara.findMany({
-        where: {
-          OR: [
-            { userId: client.apiEmail },
-            { userId: null },
-            { userId: '' }
-          ]
-        }
+        where: { tenant_id: client.apiEmail }
       });
       
       for (const m of mappings) {
@@ -154,7 +150,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
             gte: parseDate(startDate),
             lte: parseDate(endDate)
           },
-          ...(isNewSchema ? { userId: client.apiEmail } : {})
+          ...(isNewSchema ? { tenant_id: client.apiEmail } : {})
         },
         select: { chave_unica: true, qtd: true, venda: true }
       });
@@ -176,7 +172,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
       const lojaId = grupo.LOJA.LOJA;
       const lojaNome = grupo.LOJA.NOME;
       const vendasLoja = grupo.VENDAS || [];
-      const userId = client.apiEmail;
+      const tenantId = client.apiEmail;
 
       let lid: number | undefined;
 
@@ -210,12 +206,12 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
           }
 
           if (!lojaDb) {
-            console.log(`   🏠 [${client.name}] Criando Loja física global no BD: "${lojaNome}"...`);
+            console.log(`   🏠 [${client.name}] Criando Loja no BD: "${lojaNome}"...`);
             lojaDb = await (prisma as any).loja.create({
               data: {
                 nome: lojaNome,
-                userId: null, // Torna global/compartilhado
-                rede: redeName // Rede padrão para esta automação
+                tenant_id: tenantId,
+                rede: redeName
               }
             });
           }
@@ -263,7 +259,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
           // Se não houver mapeamento para o EAN limpo, autocadastra o Produto Mestre e cria o De/Para
           if (!mestreId && eanLimpo) {
             let pm = await (prisma as any).produtoMestre.findFirst({
-              where: { codigo: eanLimpo, userId: null }
+              where: { codigo: eanLimpo, tenant_id: tenantId }
             });
 
             if (!pm) {
@@ -273,7 +269,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
                   codigo: eanLimpo,
                   nome: item.PRODUTO,
                   categoria: 'Autocadastro',
-                  userId: null
+                  tenant_id: tenantId
                 }
               });
             }
@@ -284,7 +280,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
                   codigo_api: eanLimpo,
                   loja_id: null,
                   produto_mestre_id: pm.id,
-                  userId: null
+                  tenant_id: tenantId
                 }
               });
             } catch (err: any) {
@@ -332,7 +328,7 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
                 chave_unica: chaveUnica,
                 valor_unitario: valorUnitario,
                 data: parseDate(item.DATA),
-                userId: userId,
+                tenant_id: tenantId,
                 loja_id: lid,
                 produto_mestre_id: mestreId
               }

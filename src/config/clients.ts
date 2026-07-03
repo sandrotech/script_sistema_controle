@@ -2,7 +2,8 @@ export interface ClientConfig {
   name: string;
   apiEmail: string;
   apiPassword: string;
-  databaseUrl: string;
+  tenantId?: string; // Novo campo para Multi-Tenant (ID do Tenant no banco unificado)
+  databaseUrl?: string; // Mantido como opcional para retrocompatibilidade
 }
 
 export const clients: ClientConfig[] = [
