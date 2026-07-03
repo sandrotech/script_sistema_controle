@@ -7,6 +7,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Tenant {
+  id         String   @id @default(uuid())
+  nome       String
+  email_api  String?
+  created_at DateTime @default(now())
+
+  lojas       Loja[]
+  produtos    ProdutoMestre[]
+  vendas      Venda[]
+  mapeamentos ProdutoDePara[]
+
+  @@map("tenants")
+}
 
 model Venda {
   id              Int      @id @default(autoincrement())
@@ -22,61 +35,65 @@ model Venda {
   origem          String
   data_importacao DateTime @default(now())
   chave_unica     String   @unique
-  userId          String?
+  tenant_id       String
   valor_unitario  Float?
   data            DateTime
 
-  // Novos campos para arquitetura MDM
-  loja_id         Int?
-  loja_rel        Loja?    @relation(fields: [loja_id], references: [id])
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
+  loja_id           Int?
+  loja_rel          Loja?          @relation(fields: [loja_id], references: [id])
   produto_mestre_id Int?
   produto_mestre    ProdutoMestre? @relation(fields: [produto_mestre_id], references: [id])
 
   @@index([data])
   @@index([loja])
+  @@index([tenant_id])
   @@map("vendas")
 }
 
 model Loja {
-  id          Int      @id @default(autoincrement())
-  nome        String
-  cnpj        String?
-  rede        String?  // Agrupamento (Ex: "Cometa", "Frangolandia")
-  userId      String?  // Dono da loja (Tenant)
-  created_at  DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  nome       String
+  cnpj       String?
+  rede       String? // Agrupamento (Ex: "Cometa", "Frangolandia")
+  tenant_id  String
+  created_at DateTime @default(now())
 
-  vendas      Venda[]
-  
+  tenant Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  vendas Venda[]
+
+  @@index([tenant_id])
   @@map("lojas")
 }
 
 model ProdutoMestre {
-  id          Int      @id @default(autoincrement())
-  codigo      String   // Código interno do cliente (Código X)
-  nome        String
-  categoria   String?
-  userId      String?  // Dono do produto (Tenant)
-  created_at  DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  codigo     String // Código interno do cliente (Código X)
+  nome       String
+  categoria  String?
+  tenant_id  String
+  created_at DateTime @default(now())
 
+  tenant      Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   mapeamentos ProdutoDePara[]
   vendas      Venda[]
 
-  @@unique([codigo, userId])
+  @@unique([codigo, tenant_id])
   @@map("produtos_mestre")
 }
 
 model ProdutoDePara {
   id                Int      @id @default(autoincrement())
-  codigo_api        String   // Código que vem da API (Código Y)
-  loja_id           Int?     // Se o código for específico de uma unidade
+  codigo_api        String // Código que vem da API (Código Y)
+  loja_id           Int? // Se o código for específico de uma unidade
   produto_mestre_id Int
-  userId            String?  // Tenant
+  tenant_id         String
   created_at        DateTime @default(now())
 
-  produto_mestre    ProdutoMestre @relation(fields: [produto_mestre_id], references: [id], onDelete: Cascade)
+  tenant         Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  produto_mestre ProdutoMestre @relation(fields: [produto_mestre_id], references: [id], onDelete: Cascade)
 
-  @@unique([codigo_api, loja_id, userId])
+  @@unique([codigo_api, loja_id, tenant_id])
   @@map("produtos_depara")
 }
-
