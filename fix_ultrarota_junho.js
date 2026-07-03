@@ -123,6 +123,22 @@ async function main() {
     return;
   }
 
+  // ── Descobrir colunas reais da tabela ─────────────────────────
+  console.log('\n🔍 Consultando schema real da tabela vendas...');
+  const colRes = await pool.query(`
+    SELECT column_name, data_type, is_nullable
+    FROM information_schema.columns
+    WHERE table_name = 'vendas'
+    ORDER BY ordinal_position
+  `);
+  console.log('   Colunas encontradas:');
+  colRes.rows.forEach(r => console.log(`   - ${r.column_name} (${r.data_type}, nullable: ${r.is_nullable})`));
+
+  const colNames = colRes.rows.map(r => r.column_name);
+  const hasTenantId = colNames.includes('tenant_id');
+  const hasChaveUnica = colNames.includes('chave_unica');
+  console.log(`   tenant_id: ${hasTenantId ? '✅' : '❌'} | chave_unica: ${hasChaveUnica ? '✅' : '❌'}`);
+
   const TENANT_ID = 'victor@ultrarota.com.br';
   console.log(`\n📥 Inserindo ${apiVendasFlat.length} registros corretos da API (tenant: ${TENANT_ID})...`);
   let inserted = 0;
