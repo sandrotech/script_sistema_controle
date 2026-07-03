@@ -18,13 +18,14 @@ const CLIENTS_TO_CHECK = [
   "Costa frutas - maracuja",
 ];
 
-function getTodayStr(): string {
+function getDateStr(daysAgo: number): string {
   const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
   return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
 }
 
 const START_DATE = "01-01-2026";
-const END_DATE   = getTodayStr();
+const END_DATE   = getDateStr(1); // Ontem — igual ao comportamento padrão do sync:geral
 const API_URL    = "https://vendas.cometasupermercados.com.br";
 
 // Classifica o tipo de erro para mensagens mais úteis
