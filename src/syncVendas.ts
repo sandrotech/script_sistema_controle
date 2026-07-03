@@ -21,11 +21,19 @@ export async function syncVendas(client: ClientConfig, customStartDate?: string,
   console.log(`\n🛒 [${client.name}] Iniciando sincronismo...`);
 
   const apiUrl = process.env.VENDAS_API_URL || "https://vendas.cometasupermercados.com.br";
-  const isVictor = client.apiEmail === 'victor@ultrarota.com.br';
-  const isSthephanus = client.apiEmail === 'sthephanuscomercial@gmail.com';
-  const isSequilhos = client.apiEmail === 'sequilhospaulista.relatorio@gmail.com';
-  const isNewSchema = isVictor || isSthephanus || isSequilhos;
-  const redeName = isVictor ? "Cometa" : (isSthephanus ? "Cometa" : (isSequilhos ? "Cometa" : client.name));
+  const NEW_SCHEMA_EMAILS = new Set([
+    'victor@ultrarota.com.br',
+    'sthephanuscomercial@gmail.com',
+    'sequilhospaulista.relatorio@gmail.com',
+    // Clientes migrados para o novo schema MDM
+    'serrasulmorangos@gmail.com',
+    'financeiro@casadofrango.com.br',
+    'leandrochiaba@gmail.com',
+    'andredomaracuja@gmail.com',
+  ]);
+  const isNewSchema = NEW_SCHEMA_EMAILS.has(client.apiEmail);
+  const redeName = "Cometa Supermercados";
+
   
   // Em produção, usar sempre o banco de dados específico de cada cliente.
   // Em desenvolvimento local, se DATABASE_URL estiver no .env, usamos para testes locais.

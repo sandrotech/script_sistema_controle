@@ -9,6 +9,7 @@
     "sync:geral": "tsx src/syncGeral.ts",
     "sync:frangolandia-ultrarota": "tsx src/syncFrangolandiaUltraRota.ts",
     "db:migrate-frangolandia": "tsx src/fixAllFrangolandia.ts",
+    "db:migrate-schema": "tsx src/migrate-schema.ts",
     "sync:prod": "tsx src/main.ts",
     "api:start": "cd backend && tsx src/server.ts",
     "start": "tsx src/main.ts",
