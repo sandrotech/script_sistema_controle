@@ -16,6 +16,7 @@ const CLIENTS_TO_CHECK = [
   "Casa do Frango",
   "Costa frutas - limao",
   "Costa frutas - maracuja",
+  "Ultra Rota"
 ];
 
 function getDateStr(daysAgo: number): string {
@@ -24,10 +25,10 @@ function getDateStr(daysAgo: number): string {
   return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
 }
 
-const START_DATE    = "01-01-2026";
-const API_END_DATE  = getDateStr(0);  // Hoje — a API exige dataFinal no presente
-const DB_END_DATE   = getDateStr(1);  // Ontem — exclui dados parciais do dia atual do BD
-const API_URL       = "https://vendas.cometasupermercados.com.br";
+const START_DATE = "01-01-2026";
+const API_END_DATE = getDateStr(0);  // Hoje — a API exige dataFinal no presente
+const DB_END_DATE = getDateStr(1);  // Ontem — exclui dados parciais do dia atual do BD
+const API_URL = "https://vendas.cometasupermercados.com.br";
 
 // Converte "dd-mm-yyyy" para um objeto Date (23:59:59 UTC)
 function parseDateStr(str: string, endOfDay = false): Date {
@@ -90,7 +91,7 @@ async function checkParity(client: any): Promise<{ ok: boolean; step: string; de
   }
 
   // ── FASE 2: Buscar dados da API ───────────────────────────────
-   console.log(`   [2/4] 📡 Buscando vendas na API (${START_DATE} → ${DB_END_DATE})...`);
+  console.log(`   [2/4] 📡 Buscando vendas na API (${START_DATE} → ${DB_END_DATE})...`);
   let apiTotal = 0;
   let apiCount = 0;
   let lojaCount = 0;
@@ -208,7 +209,7 @@ async function main() {
   console.log('║                     RELATÓRIO FINAL                       ║');
   console.log('╚═══════════════════════════════════════════════════════════╝');
 
-  const okList    = results.filter(r => r.ok);
+  const okList = results.filter(r => r.ok);
   const errorList = results.filter(r => !r.ok);
 
   okList.forEach(r => {
