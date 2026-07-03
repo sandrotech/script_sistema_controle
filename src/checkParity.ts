@@ -24,9 +24,17 @@ function getDateStr(daysAgo: number): string {
   return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
 }
 
-const START_DATE = "01-01-2026";
-const END_DATE   = getDateStr(1); // Ontem — igual ao comportamento padrão do sync:geral
-const API_URL    = "https://vendas.cometasupermercados.com.br";
+const START_DATE    = "01-01-2026";
+const API_END_DATE  = getDateStr(0);  // Hoje — a API exige dataFinal no presente
+const DB_END_DATE   = getDateStr(1);  // Ontem — exclui dados parciais do dia atual do BD
+const API_URL       = "https://vendas.cometasupermercados.com.br";
+
+// Converte "dd-mm-yyyy" para um objeto Date (23:59:59 UTC)
+function parseDateStr(str: string, endOfDay = false): Date {
+  const [d, m, y] = str.split('-');
+  const dt = new Date(`${y}-${m}-${d}T${endOfDay ? '23:59:59' : '00:00:00'}Z`);
+  return dt;
+}
 
 // Classifica o tipo de erro para mensagens mais úteis
 function diagnoseError(error: any): string {
@@ -82,13 +90,14 @@ async function checkParity(client: any): Promise<{ ok: boolean; step: string; de
   }
 
   // ── FASE 2: Buscar dados da API ───────────────────────────────
-  console.log(`   [2/4] 📡 Buscando vendas na API (${START_DATE} → ${END_DATE})...`);
+   console.log(`   [2/4] 📡 Buscando vendas na API (${START_DATE} → ${DB_END_DATE})...`);
   let apiTotal = 0;
   let apiCount = 0;
   let lojaCount = 0;
   try {
+    // A API exige que dataFinal seja hoje ou futuro para retornar o histórico completo
     const vendasRes = await axios.get(`${API_URL}/venda`, {
-      params: { dataInicial: START_DATE, dataFinal: END_DATE },
+      params: { dataInicial: START_DATE, dataFinal: API_END_DATE },
       headers: { Authorization: `Bearer ${token!}` },
       httpsAgent: agent,
       timeout: 30000
@@ -100,9 +109,16 @@ async function checkParity(client: any): Promise<{ ok: boolean; step: string; de
     } else {
       lojaCount = dados.length;
       const vendasMap = new Map();
+      const dbEndMs = parseDateStr(DB_END_DATE, true).getTime(); // ontem 23:59:59
+
       for (const grupo of dados) {
         const lojaId = grupo.LOJA?.LOJA;
         for (const v of (grupo.VENDAS || [])) {
+          // Filtrar registros de hoje (apenas conta até ontem, igual ao BD)
+          const [dd, mm, yyyy] = (v.DATA || '').split('/');
+          const vendaDate = new Date(`${yyyy}-${mm}-${dd}T12:00:00Z`).getTime();
+          if (vendaDate > dbEndMs) continue;
+
           const eanLimpo = v.EAN ? String(v.EAN).replace(/"/g, '').split(',')[0].replace(/\D/g, '').trim() : '';
           const chave = `venda-${lojaId}-${v.DATA}-${eanLimpo}-${v.PLU || '0'}`;
           if (vendasMap.has(chave)) {
@@ -114,7 +130,7 @@ async function checkParity(client: any): Promise<{ ok: boolean; step: string; de
       }
       apiCount = vendasMap.size;
       for (const val of vendasMap.values()) apiTotal += val.venda;
-      console.log(`          ✅ ${lojaCount} lojas / ${apiCount} registros deduplicados / R$ ${apiTotal.toFixed(2)}`);
+      console.log(`          ✅ ${lojaCount} lojas / ${apiCount} registros (até ${DB_END_DATE}) / R$ ${apiTotal.toFixed(2)}`);
     }
   } catch (error: any) {
     const diag = diagnoseError(error);
@@ -131,13 +147,16 @@ async function checkParity(client: any): Promise<{ ok: boolean; step: string; de
     const pool = new Pool({ connectionString: client.databaseUrl, connectionTimeoutMillis: 10000 });
     const dbClient = await pool.connect();
     try {
+      // BD: filtra até ontem 23:59:59 — exclui dados parciais do dia atual
+      const [d, m, y] = DB_END_DATE.split('-');
+      const dbEndIso = `${y}-${m}-${d} 23:59:59`;
       const dbRes = await dbClient.query(`
         SELECT COUNT(id) AS qtd, COALESCE(SUM(venda), 0) AS total
-        FROM vendas WHERE data >= '2026-01-01 00:00:00'
-      `);
+        FROM vendas WHERE data >= '2026-01-01 00:00:00' AND data <= $1
+      `, [dbEndIso]);
       dbCount = parseInt(dbRes.rows[0].qtd);
       dbTotal = parseFloat(dbRes.rows[0].total);
-      console.log(`          ✅ ${dbCount} registros / R$ ${dbTotal.toFixed(2)}`);
+      console.log(`          ✅ ${dbCount} registros (até ${DB_END_DATE}) / R$ ${dbTotal.toFixed(2)}`);
     } finally {
       dbClient.release();
       await pool.end();
