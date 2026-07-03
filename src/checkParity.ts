@@ -192,7 +192,7 @@ async function main() {
   console.log('╔═══════════════════════════════════════════════════════════╗');
   console.log('║               AUDITORIA DE PARIDADE API vs BD             ║');
   console.log('╚═══════════════════════════════════════════════════════════╝');
-  console.log(`📅 Período : ${START_DATE} → ${END_DATE}`);
+  console.log(`📅 Período : ${START_DATE} → ${DB_END_DATE}`);
   console.log(`🔗 API     : ${API_URL}\n`);
 
   const targets = clients.filter(c => CLIENTS_TO_CHECK.includes(c.name));
