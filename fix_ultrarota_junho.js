@@ -107,14 +107,16 @@ async function main() {
     return;
   }
 
-  console.log('\n🗑️  [3/3] Apagando todos os registros de junho no BD...');
+  console.log('\n🗑️  [3/3] Apagando SOMENTE os registros de origem API_VENDAS_V2 de junho no BD...');
+  console.log('   ⚠️  Dados com origem FRANGOLANDIA_EMAIL serão PRESERVADOS.');
   try {
     const del = await pool.query(`
       DELETE FROM vendas
       WHERE data >= '2026-06-01 00:00:00'
         AND data <= '2026-06-30 23:59:59'
+        AND origem = 'API_VENDAS_V2'
     `);
-    console.log(`   ✅ ${del.rowCount} registros deletados.`);
+    console.log(`   ✅ ${del.rowCount} registros API_VENDAS_V2 deletados.`);
   } catch (e) {
     console.error('   ❌ Erro ao deletar:', e.message);
     await pool.end();
